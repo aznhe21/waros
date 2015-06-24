@@ -1,6 +1,6 @@
 /*
  * Rust BareBones OS
- * - By John Hodge (Mutabah/thePowersGang) 
+ * - By John Hodge (Mutabah/thePowersGang)
  *
  * arcm/x86/start.S
  * - x86 Entrypoint
@@ -40,45 +40,50 @@ mboot:
 .section .inittext, "ax"
 .globl start
 start:
+	/* Reset eflags */
+	pushl $0
+	popf
+
 	/* Save multiboot state */
-	mov %eax, mboot_sig - LINKED_BASE
-	mov %ebx, mboot_ptr - LINKED_BASE
-	
+	movl %eax, mboot_sig - LINKED_BASE
+	movl %ebx, mboot_ptr - LINKED_BASE
+
+	movl $0, %gs:0x30 /* needed by __morestack */
+
 	/* XXX: Get rust code to prepare the page table */
 	mov $init_stack - LINKED_BASE, %esp
 	push $init_pt - LINKED_BASE
 	call x86_prep_page_table - LINKED_BASE
 	add 4, %esp
-	
+
 	/* Enable paging */
 	mov $init_pd - LINKED_BASE, %eax
 	mov %eax, %cr3
 	mov %cr0, %eax
 	or $0x80010000, %eax      /* PG & WP */
 	mov %eax, %cr0
-	
+
 	lgdt GDTPtr
-	
+
 	/* Jump High and set CS */
-	ljmp $0x08,$start_high
+	ljmp $0x08, $start_high
 .section .text
-.globl start_high
 .extern kmain
 start_high:
 	/* Clear identity mapping */
 	movl $0, init_pd+0
-	
-	/* Prep segment registers */	
-	mov $0x10, %ax
+
+	/* Prep segment registers */
+	mov $2*0x08, %ax // 2*0x08 is data segment
 	mov %ax, %ss
 	mov %ax, %ds
 	mov %ax, %es
 	mov %ax, %fs
 	mov %ax, %gs
-	
+
 	mov $init_stack, %esp
 	call kmain
-	
+
 	/* If kmain returns, loop forefer */
 .l:
 	hlt
@@ -100,7 +105,7 @@ init_pt:
 	.rept 1024
 		.long 0
 	.endr
-	
+
 /* === Read-write data === */
 .section .data
 .globl mboot_sig
@@ -120,7 +125,6 @@ GDT:
 	.long 0x0000FFFF, 0x00CFF200	/* 20 PL3 Data */
 GDTEnd:
 
-	
 .section .bss
 	.space 0x1000*2
 init_stack:

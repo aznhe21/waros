@@ -1,6 +1,6 @@
 /*
  * Rust BareBones OS
- * - By John Hodge (Mutabah/thePowersGang) 
+ * - By John Hodge (Mutabah/thePowersGang)
  *
  * arch/amd64/mod.rs
  * - Top-level file for amd64 architecture
@@ -10,11 +10,14 @@
  * its use, and the author takes no liability.
  */
 
-// x86 port IO 
+// x86 port IO
 #[path = "../x86_common/io.rs"]
 mod x86_io;
 
-// Debug output channel (uses serial)
-#[path = "../x86_common/debug.rs"]
-pub mod debug;
+// Serial output channel
+#[path = "../x86_common/serial.rs"]
+pub mod serial;
+
+#[path = "../x86_common/interrupt/mod.rs"]
+pub mod interrupt;
 

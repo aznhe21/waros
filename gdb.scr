@@ -1,0 +1,3 @@
+target remote localhost:1234
+source Kernel
+symbol-file kernel.x86.bin

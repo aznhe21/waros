@@ -1,0 +1,4 @@
+This is a common directory.
+Please use to define common structs, enums, constants, etc...
+DO NOT include architecture-specific code.
+

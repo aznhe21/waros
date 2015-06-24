@@ -1,7 +1,11 @@
 .*
 
 /libcore
+/liballoc
 
 /*.dsm
 /*.bin
+/*.bin.elf64
+/*.iso
+/grub/*.img
 
