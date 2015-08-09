@@ -9,4 +9,7 @@
  * its use, and the author takes no liability.
  */
 pub use core::prelude::*;
-pub use rt::*;
+
+pub use rt::ptr::{UOffset, UOffsetMut};
+pub use memory::kernel::AsPhysAddr;
+

@@ -34,7 +34,7 @@ LINKFLAGS += -z max-page-size=0x1000
 
 RUSTFLAGS := --color always --cfg arch__$(ARCH) --target=$(TARGETSPEC)
 ifeq ($(DEBUG),yes)
-    RUSTFLAGS += -g -C opt-level=0
+    RUSTFLAGS += -g
 else
     RUSTFLAGS += -O
 endif
@@ -46,7 +46,7 @@ endif
 # Objects
 LIBCORE := $(OBJDIR)libcore.rlib
 LIBALLOC := $(OBJDIR)liballoc.rlib
-OBJS := start.o handlers.o kernel.o libcore.rlib liballoc.rlib
+OBJS := start.o asm.o kernel.o libcore.rlib liballoc.rlib
 OBJS := $(OBJS:%=$(OBJDIR)%)
 BIN := ../kernel.$(ARCH).bin
 GRUB_DIR := ../grub/
@@ -95,9 +95,9 @@ $(OBJDIR)start.o: arch/$(ARCH)/start.S
 	$(AS) $(ASFLAGS) -o $@ $<
 
 # Compile architecture's assembly stub
-$(OBJDIR)handlers.o: arch/$(ARCH)/interrupt/handlers.S
+$(OBJDIR)asm.o: arch/$(ARCH)/memory.S arch/$(ARCH)/interrupt/handlers.S arch/$(ARCH)/interrupt/flush_gdt.S
 	@mkdir -p $(dir $@)
-	$(AS) $(ASFLAGS) -o $@ $<
+	$(AS) $(ASFLAGS) -o $@ $^
 
 # Include dependency files
--include $(OBJDIR)libcore.d $(OBJDIR)liballoc.d $(OBJDIR)kernel.d $(OBJDIR)start.d $(OBJDIR)handlers.d
+-include $(OBJDIR)libcore.d $(OBJDIR)liballoc.d $(OBJDIR)kernel.d $(OBJDIR)start.d $(OBJDIR)asm.d

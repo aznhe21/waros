@@ -14,8 +14,9 @@
 #![feature(core)]	//< libcore (see below) is not yet stablized
 #![feature(alloc)]	//< liballoc (see below) is not yet stablized
 #![feature(associated_consts)]
-#![feature(zero_one)]
-#![feature(concat_idents)]
+#![feature(core_intrinsics, core_prelude, core_slice_ext, core_str_ext, ptr_as_ref)]
+#![feature(zero_one, num_bits_bytes, step_by)]
+
 #![no_std]	//< Kernels can't use std
 #![no_builtins]
 
@@ -64,7 +65,7 @@ pub mod memory;
 // Kernel entrypoint
 #[lang="start"]
 #[no_mangle]
-pub fn kmain() {
+pub fn kmain() -> ! {
     use core::cmp;
     use arch::interrupt::input::{Event, Key};
 
@@ -77,29 +78,21 @@ pub fn kmain() {
         panic!("Multiboot magic is invalid");
     }
 
+    multiboot::init();
+
     if !multiboot::info().vbe_controller_info().expect("VBE not supported").valid() {
         panic!("VBE signature is invalid");
     }
 
-    //memory::init(0x00400000, 0xC0000000);
+    memory::init(multiboot::info().mmap().expect("Memory map not provided"));
+    //memory::allocate(32, 4);
+    arch::page::init();
+
     arch::interrupt::init();
+    arch::interrupt::sti_hlt();
+
     arch::drivers::init();
 
-    let mut msize = 1024 * 1024_u32;
-    for mmap in multiboot::info().mmap().expect("There is no memory map information") {
-        log!("Base: {:08X}, Length: {:08X}, Type: {}", mmap.base_addr, mmap.length, mmap.type_);
-        log!("End: {:08X}", mmap.base_addr + mmap.length);
-        if mmap.type_ == multiboot::MemoryType::Usable {
-            msize += mmap.length as u32;
-        }
-    }
-    log!("MMap Size: {} MB", msize / 1024 / 1024);
-
-    log!("Memory: {} MB", memory::size() / 1024 / 1024);
-    //log!("CmdLine: {}", multiboot::info().str_cmdline());
-
-    //let display = display::vga::Vga::new();
-    //let display = display::bochs::Bochs::new(1024, 768);
     let display = display::vbe::Vbe::new();
     display.log();
     display.clear(Color::White);
@@ -107,9 +100,6 @@ pub fn kmain() {
     let mut mouse_pos = (0 as DisplaySize, 0 as DisplaySize);
     let mut clicking = false;
     let mut color: u8 = 1;
-
-    arch::interrupt::sti();
-    arch::interrupt::hlt();
 
     loop {
         arch::interrupt::cli();
@@ -177,8 +167,7 @@ pub fn kmain() {
                 }
             },
             Event::None => {
-                arch::interrupt::sti();
-                arch::interrupt::hlt();
+                arch::interrupt::sti_hlt();
             }
         }
     }

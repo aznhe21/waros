@@ -8,15 +8,32 @@ pub mod rtc;
 mod a20;
 pub mod input;
 
-const GDT_KERNEL_CS: usize = 2;
-const GDT_KERNEL_DS: usize = 3;
-const GDT_KERNEL_TSS: usize = 4;
+const GDT_ENTRY_BOOT_CS:  usize = 2;
+const GDT_ENTRY_BOOT_DS:  usize = 3;
+const GDT_ENTRY_BOOT_TSS: usize = 4;
+const GDT_BOOT_ENTRIES:   usize = 5;
 
-const KERNEL_CS: usize = GDT_KERNEL_CS * 8;
-const KERNEL_DS: usize = GDT_KERNEL_DS * 8;
-const KERNEL_TSS: usize = GDT_KERNEL_TSS * 8;
-//USER_CS
-//USER_DS
+const BOOT_CS:  usize = GDT_ENTRY_BOOT_CS  * 8;
+const BOOT_DS:  usize = GDT_ENTRY_BOOT_DS  * 8;
+const BOOT_TSS: usize = GDT_ENTRY_BOOT_TSS * 8;
+
+const GDT_ENTRY_KERNEL_CS:          usize = 12;
+const GDT_ENTRY_KERNEL_DS:          usize = 13;
+const GDT_ENTRY_DEFAULT_USER_CS:    usize = 14;
+const GDT_ENTRY_DEFAULT_USER_DS:    usize = 15;
+const GDT_ENTRY_TSS:                usize = 16;
+const GDT_ENTRY_LDT:                usize = 17;
+const GDT_ENTRIES:                  usize = 18;
+
+const KERNEL_CS: usize = GDT_ENTRY_KERNEL_CS * 8;
+const KERNEL_DS: usize = GDT_ENTRY_KERNEL_DS * 8;
+
+#[inline(always)]
+pub extern "C" fn sti() {
+    unsafe {
+        asm!("sti" :::: "volatile");
+    }
+}
 
 #[inline(always)]
 pub extern "C" fn hlt() {
@@ -26,9 +43,9 @@ pub extern "C" fn hlt() {
 }
 
 #[inline(always)]
-pub extern "C" fn sti() {
+pub extern "C" fn sti_hlt() {
     unsafe {
-        asm!("sti" :::: "volatile");
+        asm!("sti \n hlt" :::: "volatile");
     }
 }
 
@@ -52,7 +69,7 @@ pub fn pre_init() {
     }
 }
 
-#[inline(always)]
+#[inline]
 pub fn init() {
     unsafe {
         gdt::init();

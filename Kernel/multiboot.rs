@@ -2,6 +2,7 @@
 
 use prelude::*;
 use rt;
+use arch;
 use core::mem;
 use core::slice;
 use core::fmt;
@@ -27,15 +28,34 @@ const MB_INFO_FLAG_GRAPHICS_TABLE:   u32 = 0x00000800;
 
 extern {
     static mboot_sig: u32;
-    static mboot_ptr: *mut MultibootInfo;
+    static mut mboot_ptr: *mut MultibootInfo;
 }
 
+#[inline(always)]
 pub fn magic_valid() -> bool {
     mboot_sig == MULTIBOOT_BOOTLOADER_MAGIC
 }
 
+#[inline(always)]
 pub fn info() -> &'static MultibootInfo {
-    unsafe { &*::arch::indirect_pointer(mboot_ptr) }
+    unsafe { &*mboot_ptr }
+}
+
+#[inline]
+pub fn init() {
+    let info = unsafe {
+        mboot_ptr = mboot_ptr.uoffset8(arch::KERNEL_BASE);
+        &mut *mboot_ptr
+    };
+    info.cmdline += arch::KERNEL_BASE as u32;
+    info.mods_addr += arch::KERNEL_BASE as u32;
+    info.mmap_addr += arch::KERNEL_BASE as u32;
+    info.drives_addr += arch::KERNEL_BASE as u32;
+    info.config_table += arch::KERNEL_BASE as u32;
+    info.boot_loader_name += arch::KERNEL_BASE as u32;
+    info.apm_table += arch::KERNEL_BASE as u32;
+    info.vbe_controller_info += arch::KERNEL_BASE as u32;
+    info.vbe_mode_info += arch::KERNEL_BASE as u32;
 }
 
 /*#[cfg(target_arch="x86")]
@@ -84,12 +104,12 @@ pub struct MultibootInfo {
 }
 
 impl MultibootInfo {
-    #[inline]
-    pub fn has(&self, bit: u8) -> bool {
-        self.flags & (1 << bit) != 0
+    #[inline(always)]
+    pub fn has(&self, bit: u32) -> bool {
+        self.flags & 1_u32.wrapping_shl(bit) != 0
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn mem_size(&self) -> Option<u32> {
         if self.has(0) {
             Some((self.mem_lower + self.mem_upper + 1024) * 1024)
@@ -104,7 +124,7 @@ impl MultibootInfo {
     pub fn str_cmdline(&self) -> &'static str {
         if self.has(2) {
             unsafe {
-                let ptr = ::arch::indirect_pointer(self.cmdline as *const u8);
+                let ptr = self.cmdline as *const u8;
                 mem::transmute(slice::from_raw_parts(ptr, rt::strlen(ptr)))
             }
         } else {
@@ -135,11 +155,14 @@ impl MultibootInfo {
     }
 
     // 6: mmap
+    #[inline(always)]
     pub fn mmap(&self) -> Option<&'static [MemoryMap]> {
         if self.has(6) {
-            let ptr = ::arch::indirect_pointer(self.mmap_addr as *mut MemoryMap);
-            let size = self.mmap_length as usize / mem::size_of::<MemoryMap>();
-            Some(unsafe { slice::from_raw_parts(ptr, size) })
+            Some(unsafe {
+                let ptr = self.mmap_addr as *mut MemoryMap;
+                let size = self.mmap_length as usize / mem::size_of::<MemoryMap>();
+                slice::from_raw_parts(ptr, size)
+            })
         } else {
             None
         }
@@ -154,7 +177,7 @@ impl MultibootInfo {
     #[inline]
     pub fn vbe_controller_info(&self) -> Option<&VbeControllerInfo> {
         if self.has(11) {
-            Some(unsafe { &*::arch::indirect_pointer(self.vbe_controller_info as *mut VbeControllerInfo) })
+            Some(unsafe { &*(self.vbe_controller_info as *mut VbeControllerInfo) })
         } else {
             None
         }
@@ -163,7 +186,7 @@ impl MultibootInfo {
     #[inline]
     pub fn vbe_mode_info(&self) -> Option<&VbeModeInfo> {
         if self.has(11) {
-            Some(unsafe { &*::arch::indirect_pointer(self.vbe_mode_info as *mut VbeModeInfo) })
+            Some(unsafe { &*(self.vbe_mode_info as *mut VbeModeInfo) })
         } else {
             None
         }
@@ -216,9 +239,13 @@ impl fmt::Display for MemoryType {
 
 #[repr(C)]
 pub struct MemoryMap {
+    // この構造体のサイズ(20)
     pub size: u32,
+    // 開始アドレス
     pub base_addr: u64,
+    // 領域の大きさ
     pub length: u64,
+    // メモリの種類
     pub type_: MemoryType
 }
 
@@ -249,35 +276,35 @@ pub struct VbeControllerInfo {
 impl VbeControllerInfo {
     const MAGIC: u32 = 0x41534556; // 'VESA'
 
-    #[inline]
+    #[inline(always)]
     pub fn valid(&self) -> bool {
         self.signature == VbeControllerInfo::MAGIC
     }
 
     pub fn str_vendor_string(&self) -> &'static str {
         unsafe {
-            let ptr = ::arch::indirect_pointer(self.vendor_string as *const u8);
+            let ptr = self.vendor_string as *const u8;
             mem::transmute(slice::from_raw_parts(ptr, rt::strlen(ptr)))
         }
     }
 
     pub fn str_vendor_name(&self) -> &'static str {
         unsafe {
-            let ptr = ::arch::indirect_pointer(self.vendor_name as *const u8);
+            let ptr = self.vendor_name as *const u8;
             mem::transmute(slice::from_raw_parts(ptr, rt::strlen(ptr)))
         }
     }
 
     pub fn str_product_name(&self) -> &'static str {
         unsafe {
-            let ptr = ::arch::indirect_pointer(self.product_name as *const u8);
+            let ptr = self.product_name as *const u8;
             mem::transmute(slice::from_raw_parts(ptr, rt::strlen(ptr)))
         }
     }
 
     pub fn str_product_rev(&self) -> &'static str {
         unsafe {
-            let ptr = ::arch::indirect_pointer(self.product_rev as *const u8);
+            let ptr = self.product_rev as *const u8;
             mem::transmute(slice::from_raw_parts(ptr, rt::strlen(ptr)))
         }
     }
@@ -323,9 +350,9 @@ pub struct VbeModeInfo {
 }
 
 impl VbeModeInfo {
-    #[inline]
+    #[inline(always)]
     pub fn vram(&self) -> *mut u8 {
-        ::arch::indirect_pointer_mut(self.phys_base_ptr as *mut u8)
+        self.phys_base_ptr as *mut u8
     }
 }
 

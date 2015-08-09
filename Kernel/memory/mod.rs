@@ -1,222 +1,257 @@
 #![allow(dead_code)]
 
-use core::prelude::*;
-use core::u32;
+use prelude::*;
+use self::kernel::PhysAddr;
+use core::usize;
 use core::mem;
 use core::ptr;
-use core::intrinsics::{volatile_load, volatile_store};
-//use arch;
-use multiboot::MultibootInfo;
+use core::slice;
+use multiboot;
 
 pub mod rust;
+pub mod kernel;
 
-/*pub fn init(begin: usize, end: usize) {
+struct PhysicalMemory {
+    total_size: usize,
+    total_blocks: usize,
+    allocated_blocks: usize,
+    free_blocks: usize,
+    first: *mut PhysicalMemoryBlock
 }
 
-pub fn size() -> usize {
-    0
-}
+impl PhysicalMemory {
+    const BLOCK_SIZE: usize = 0x1000;
 
-fn allocate(size: usize, align: usize) -> *mut u8 {
-    0 as *mut u8
-}
-
-fn free(ptr: *mut u8) {
-}
-
-fn reallocate(ptr: *mut u8, size: usize, align: usize) -> *mut u8 {
-    0 as *mut u8
-}*/
-
-struct Block {
-    size: usize,
-    prev: *mut Block,
-    next: *mut Block
-}
-
-impl Block {
-    fn next(&mut self, size: usize) -> Option<&mut Block> {
-        if self.data_size() >= size {
-            Some(self)
-        } else if !self.next.is_null() {
-            unsafe { (*self.next).next(size) }
-        } else {
-            None
-        }
+    pub fn iter(&self) -> PhysicalMemoryIter {
+        PhysicalMemoryIter { block: self.first }
     }
 
-    fn find<T>(&mut self, ptr: *mut T) -> Option<&mut Block> {
-        if unsafe { self.data_ptr() } == ptr {
-            Some(self)
-        } else if !self.next.is_null() {
-            unsafe { (*self.next).find(ptr) }
-        } else {
-            None
+    pub fn block_of(&self, ptr: *const u8) -> Option<&'static mut PhysicalMemoryBlock> {
+        unsafe {
+            self.iter()
+                .filter(|block| ptr >= block.data_ptr() && block.data_ptr().uoffset(block.data_size()) < ptr)
+                .next()
+        }
+    }
+}
+
+struct PhysicalMemoryIter {
+    block: *mut PhysicalMemoryBlock
+}
+
+impl Iterator for PhysicalMemoryIter {
+    type Item = &'static mut PhysicalMemoryBlock;
+
+    #[inline]
+    fn next(&mut self) -> Option<&'static mut PhysicalMemoryBlock> {
+        unsafe {
+            let ret = self.block;
+            self.block = ret.as_mut().map_or(ptr::null_mut(), |block| block.next);
+            ret.as_mut()
+        }
+    }
+}
+
+struct PhysicalMemoryBlock {
+    next: *mut PhysicalMemoryBlock,
+    size: usize
+}
+
+impl PhysicalMemoryBlock {
+    pub fn new(next: *mut PhysicalMemoryBlock, mblock: &multiboot::MemoryMap) -> *mut PhysicalMemoryBlock {
+        unsafe {
+            let block = &mut *PhysAddr::from_raw(mblock.base_addr as usize).as_virt_addr().as_mut_ptr();
+            *block = PhysicalMemoryBlock {
+                next: next,
+                size: mblock.length as usize
+            };
+            mem::transmute(&block)
         }
     }
 
     #[inline]
-    unsafe fn data_ptr<T>(&mut self) -> *mut T {
-        let ptr: *mut Block = mem::transmute(&self);
-        mem::transmute(ptr.offset(1))
+    fn bmap_len(&self) -> usize {
+        (self.size + usize::BITS - 1) / usize::BITS
     }
-
-    /*#[inline]
-    fn data<T>(&mut self) -> &'static mut T {
-        unsafe { &mut *self.data_ptr() }
-    }*/
 
     #[inline]
-    fn data_size(&self) -> usize {
-        self.size - mem::size_of::<Block>()
+    fn bmap_ptr(&self) -> *mut usize {
+        unsafe {
+            let ptr: *mut u8 = mem::transmute(self);
+            ptr.uoffset(mem::size_of::<PhysicalMemoryBlock>()) as *mut usize
+        }
+    }
+
+    #[inline]
+    fn bmap(&self) -> &[usize] {
+        unsafe {
+            slice::from_raw_parts(self.bmap_ptr(), self.bmap_len())
+        }
+    }
+
+    #[inline]
+    fn bmap_mut(&mut self) -> &mut [usize] {
+        unsafe {
+            slice::from_raw_parts_mut(self.bmap_ptr(), self.bmap_len())
+        }
+    }
+
+    #[inline]
+    fn data_ptr(&self) -> *const u8 {
+        unsafe {
+            let ptr: *const u8 = mem::transmute(self);
+            ptr.uoffset(mem::size_of::<PhysicalMemoryBlock>() + self.bmap_len() * mem::size_of::<usize>())
+        }
+    }
+
+    #[inline]
+    fn data_ptr_mut(&mut self) -> *mut u8 {
+        self.data_ptr() as *mut u8
+    }
+
+    #[inline]
+    pub fn data_size(&self) -> usize {
+        self.size - mem::size_of::<PhysicalMemoryBlock>() - self.bmap_len() * mem::size_of::<usize>()
+    }
+
+    #[inline]
+    pub fn occupied(&self, index: usize) -> bool {
+        self.bmap()[index / usize::BITS] & (1 << (index % usize::BITS)) == 0
+    }
+
+    pub fn addr<T>(&mut self, index: usize) -> *mut T {
+        unsafe {
+            self.data_ptr().uoffset(index * PhysicalMemory::BLOCK_SIZE) as *mut T
+        }
+    }
+
+    pub fn allocate(&mut self, alloc_bits: usize, size: usize, _align: usize) -> *mut u8 {
+        unsafe {
+            let data_slice = slice::from_raw_parts_mut(self.data_ptr_mut() as *mut usize, self.bmap_len());
+            for (cur_bits, addr) in self.bmap_mut().iter_mut().zip(data_slice) {
+                let mut bits = *cur_bits;
+                for j in 0 .. usize::BITS {
+                    if bits & alloc_bits == alloc_bits {
+                        *cur_bits &= !(alloc_bits << j);
+                        *addr = size;
+                        let ptr: *mut usize = mem::transmute(addr);
+                        log!("Allocated Addr: {:p}", ptr);
+                        return ptr.uoffset(1) as *mut u8;
+                    }
+                    bits = bits.wrapping_shr(1);
+                }
+            }
+            ptr::null_mut()
+        }
+    }
+
+    pub fn reallocate(&mut self, _ptr: *mut u8, _size: usize, _align: usize) -> *mut u8 {
+        0 as *mut u8
+    }
+
+    pub fn free(&mut self, ptr: *mut u8) {
+        unsafe {
+            let index = self.data_ptr() as usize - ptr as usize;
+            let total = *(ptr as *mut usize).uoffset_rev(1);
+            let bits_len = total + usize::BITS - 1;
+            let bits = (1 << bits_len / usize::BITS) - 1;
+            self.bmap_mut()[index / usize::BITS] |= bits << ((index % usize::BITS) - bits_len);
+        }
     }
 }
 
-struct BlockList {
-    first: *mut Block,
-    last: *mut Block
-}
+static mut physical_memory: PhysicalMemory = PhysicalMemory {
+    total_size: 0, total_blocks: 0, allocated_blocks: 0, free_blocks: 0,
+    first: 0 as *mut PhysicalMemoryBlock
+};
 
-impl BlockList {
-    fn next(&mut self, size: usize) -> Option<&mut Block> {
-        unsafe { (*self.first).next(size) }
+#[inline]
+pub fn init(_mmap: &[multiboot::MemoryMap]) {
+    kernel::init();
+
+    /*for block in mmap {
+        log!("{}: Addr {:X} Length {:X}", block.type_.description(), block.base_addr, block.length);
     }
 
-    fn find<T>(&mut self, ptr: *mut T) -> Option<&mut Block> {
-        unsafe { (*self.first).find(ptr) }
-    }
+    let size = mmap.iter()
+        .filter(|block| block.type_ == multiboot::MemoryType::Usable)
+        .fold(0, |acc, block| acc + block.length as usize);
+    let blocks = size / PhysicalMemory::BLOCK_SIZE;
 
-    fn add(&mut self, target: &mut Block) {
-        target.prev = self.last;
-        target.next = ptr::null_mut();
-        if self.first.is_null() {
-            self.first = target;
-        }
-        if !self.last.is_null() {
-            unsafe { (*self.last).next = target };
-        }
-        self.last = target;
-    }
+    let first_block = mmap.iter()
+        .filter(|block| block.type_ == multiboot::MemoryType::Usable)
+        .rev()
+        .fold(0 as *mut PhysicalMemoryBlock, |next, block| PhysicalMemoryBlock::new(next, block));
 
-    fn remove(&mut self, target: &mut Block) {
-        if self.first == target {
-            self.first = target.next;
-        }
-        if self.last == target {
-            self.last = target.prev;
-        }
-    }
-
-    fn remove_and_insert(&mut self, old: &mut Block, new: &mut Block) {
-        new.prev = old.prev;
-        new.next = old.next;
-        if !old.next.is_null() {
-            unsafe { (*old.next).prev = new };
-        }
-        if !old.prev.is_null() {
-            unsafe { (*old.prev).next = new };
-        }
-        if self.first == old {
-            self.first = new;
-        }
-        if self.last == old {
-            self.last = new;
-        }
-    }
-}
-
-static mut free_list: BlockList = BlockList { first: 0 as *mut Block, last: 0 as *mut Block };
-static mut allocated: BlockList = BlockList { first: 0 as *mut Block, last: 0 as *mut Block };
-static mut cached_size: usize = 0;
-
-unsafe fn fetch_size(begin: usize, end: usize) -> usize {
-    let mut ptr = begin as *mut u32;
-
-    while ptr < end as *mut u32 {
-        let val = volatile_load(ptr);
-        volatile_store(ptr, 0x12345678);
-        if volatile_load(ptr) != 0x12345678 {
-            break;
-        }
-        volatile_store(ptr, val);
-        ptr = ptr.offset(1024 * 1024 / u32::BYTES as isize);
-    }
-
-    ptr as usize
-}
-
-pub fn init(_multiboot: &'static MultibootInfo) {
-    /*unsafe {
-        arch::begin_memory_direct_access();
-        cached_size = fetch_size(begin, end);
-        arch::end_memory_direct_access();
-
-        let block: *mut Block = mem::transmute(begin);
-        *block = Block {
-            size: cached_size,
-            prev: ptr::null_mut(),
-            next: ptr::null_mut()
-        };
-
-        free_list = BlockList {
-            first: block,
-            last: block
+    unsafe {
+        physical_memory = PhysicalMemory {
+            total_size: size,
+            total_blocks: blocks,
+            allocated_blocks: blocks,
+            free_blocks: 0,
+            first: first_block
         };
     }*/
 }
 
+#[inline]
 pub fn size() -> usize {
-    //unsafe { cached_size }
-    ::multiboot::info().mem_size().unwrap_or(0) as usize
+    unsafe { physical_memory.total_size }
 }
 
-pub fn allocate<T>(size: usize, _align: usize) -> *mut T {
+pub fn allocate(size: usize, align: usize) -> *mut u8 {
+    let total = size + usize::BYTES;
+    let bits = (1 << (total + usize::BITS - 1) / usize::BITS) - 1;
     unsafe {
-        free_list.next(size).map_or(ptr::null_mut(), |block| {
-            let ptr = block.data_ptr::<T>();
-
-            let next = &mut *(ptr.offset(size as isize) as *mut Block);
-            next.size = block.data_size() - size;
-            free_list.remove_and_insert(block, next);
-
-            block.size = mem::size_of::<Block>() + size;
-            allocated.add(block);
-
-            ptr
-        })
+        physical_memory.iter().map(|block| block.allocate(bits, total, align))
+            .filter(|ptr| !ptr.is_null())
+            .next()
+            .unwrap_or(ptr::null_mut())
     }
 }
 
-pub fn reallocate<T>(ptr: *mut T, _size: usize, _align: usize) -> *mut T {
+pub fn reallocate(ptr: *mut u8, size: usize, align: usize) -> *mut u8 {
     unsafe {
-        allocated.find(ptr).map_or(ptr::null_mut(), |_block| {
-            //
-            0 as *mut T
-        })
-    }
-}
-
-pub fn new<T>() -> Option<&'static mut T> {
-    unsafe {
-        allocate(mem::size_of::<T>(), mem::min_align_of::<T>()).as_mut()
-    }
-}
-
-pub fn free<T>(ptr: *mut T) {
-    unsafe {
-        match allocated.find(ptr) {
-            Some(block) => {
-                allocated.remove(block);
-                free_list.add(block);
-            },
-            None => {}
+        match physical_memory.block_of(ptr) {
+            Some(block) => block.reallocate(ptr, size, align),
+            None => ptr::null_mut()
         }
     }
 }
 
-pub fn delete<T>(data: &'static mut T) {
+pub fn free(ptr: *mut u8) {
     unsafe {
-        free::<T>(mem::transmute(data));
+        if let Some(block) = physical_memory.block_of(ptr) {
+            block.free(ptr);
+        }
     }
+}
+
+#[allow(improper_ctypes)]
+extern "C" {
+    fn memory_fill8(ptr: *mut u8, val: u8, size: usize);
+    fn memory_fill16(ptr: *mut u16, val: u16, size: usize);
+    fn memory_fill32(ptr: *mut u32, val: u32, size: usize);
+    fn memory_fill64(ptr: *mut u64, val: u64, size: usize);
+}
+
+#[inline(always)]
+pub unsafe extern "C" fn fill8(ptr: *mut u8, val: u8, size: usize) {
+    memory_fill8(ptr, val, size);
+}
+
+#[inline(always)]
+pub unsafe extern "C" fn fill16(ptr: *mut u16, val: u16, size: usize) {
+    memory_fill16(ptr, val, size);
+}
+
+#[inline(always)]
+pub unsafe extern "C" fn fill32(ptr: *mut u32, val: u32, size: usize) {
+    memory_fill32(ptr, val, size);
+}
+
+#[inline(always)]
+pub unsafe extern "C" fn fill64(ptr: *mut u64, val: u64, size: usize) {
+    memory_fill64(ptr, val, size);
 }
 

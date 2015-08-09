@@ -26,7 +26,7 @@ pub unsafe fn pre_init() {
     outb(PORT_SLAVE_PIC_IMR, 0xFF);
 }
 
-#[inline(always)]
+#[inline]
 pub unsafe fn init() {
     // master
     outb(PORT_MASTER_PIC_COMMAND, PIC_ICW1);     // ICW1
@@ -80,6 +80,20 @@ pub fn disable_irq(irq: u8) {
         0...7  => disable_port(PORT_MASTER_PIC_IMR, 1 << irq),
         8...16 => disable_port(PORT_SLAVE_PIC_IMR, 1 << (irq - 8)),
         _ => {}
+    }
+}
+
+#[inline]
+pub fn eoi(irq: u8) {
+    unsafe {
+        match irq {
+            0...7 => outb(PORT_MASTER_PIC_COMMAND, 0x60 | irq),
+            8...16 => {
+                outb(PORT_SLAVE_PIC_COMMAND, 0x60 | (irq - 8));
+                outb(PORT_MASTER_PIC_COMMAND, 0x62);
+            },
+            _ => {}
+        }
     }
 }
 

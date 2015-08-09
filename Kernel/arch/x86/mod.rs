@@ -12,6 +12,7 @@
 #![allow(dead_code)]
 
 use prelude::*;
+use memory::kernel::VirtAddr;
 use core::mem;
 use core::fmt::Write;
 use logging::Writer;
@@ -24,43 +25,62 @@ mod x86_io;
 #[path = "../x86_common/serial.rs"]
 pub mod serial;
 
+#[path = "../x86_common/page.rs"]
+pub mod page;
+
 #[path = "../x86_common/interrupt/mod.rs"]
 pub mod interrupt;
 
 #[path = "../x86_common/drivers/mod.rs"]
 pub mod drivers;
 
+pub const PAGE_SIZE: usize = 0x1000;
+pub const FRAME_SIZE: usize = 0x1000;
 pub const KERNEL_BASE: usize = 0xC0000000;
 
 extern {
-    fn into_protection(entry: fn());
+    static __kernel_start: ();
+    static __kernel_end: ();
+}
+
+#[inline(always)]
+pub fn kernel_start() -> VirtAddr {
+    let addr: u32 = unsafe { mem::transmute(&__kernel_start) };
+    VirtAddr::from_raw(addr as usize - 0x00100000)
+}
+
+#[inline(always)]
+pub fn kernel_end() -> VirtAddr {
+    let addr: u32 = unsafe { mem::transmute(&__kernel_end) };
+    VirtAddr::from_raw(addr as usize)
+}
+
+#[inline(always)]
+pub fn kernel_size() -> usize {
+    kernel_end().value() - kernel_start().value()
 }
 
 #[no_mangle]
-pub fn x86_prep_page_table(buf: &mut [u32; 1024]) {
-    for i in 0u32 .. 1024 {
-        buf[i as usize] = i * 0x1000 + 3;
+pub fn x86_prep_page_table(buf: &mut [u32; 2048]) {
+    for i in 0u32 .. 2048 {
+        buf[i as usize] = (i << 12) | 3;
+        //buf[i as usize] = i * 0x1000 + 3;
     }
 }
 
 #[no_mangle]
 pub fn x86_pre_init() {
-    //log!("WARos: pre boot");
+    log!("WARos: pre boot");
 
     interrupt::pre_init();
     drivers::pre_init();
 
-    let main = super::kmain;
-    unsafe {
-        /*while !serial::is_transmit_empty() {
-            // Do nothing
-        }*/
-
-        into_protection(main);
-    }
+    /*while !serial::is_transmit_empty() {
+        // Do nothing
+    }*/
 }
 
-#[inline(always)]
+/*#[inline(always)]
 pub fn indirect_pointer<T>(ptr: *const T) -> *const T {
     (ptr as usize + KERNEL_BASE) as *const T
 }
@@ -78,7 +98,7 @@ pub unsafe fn indirect_unwrap<T>(ptr: *const T) -> &'static T {
 #[inline(always)]
 pub unsafe fn indirect_unwrap_mut<T>(ptr: *mut T) -> &'static T {
     &*indirect_pointer_mut(ptr)
-}
+}*/
 
 #[inline(always)]
 pub unsafe extern "C" fn begin_memory_direct_access() {

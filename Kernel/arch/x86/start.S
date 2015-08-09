@@ -12,6 +12,7 @@
 
 /* The kernel is linked to run at 3GB */
 LINKED_BASE = 0xC0000000
+PDT_INDEX = LINKED_BASE >> 22
 
 /* === Multiboot Header === */
 MULTIBOOT_PAGE_ALIGN  =  (1<<0)
@@ -40,64 +41,96 @@ mboot:
 .section .inittext, "ax"
 .globl start
 start:
-	/* Reset eflags */
+	/* EFLAGSをリセット */
 	pushl $0
 	popf
 
-	/* Save multiboot state */
+	/* Multibootのアドレスを保存 */
 	movl %eax, mboot_sig - LINKED_BASE
 	movl %ebx, mboot_ptr - LINKED_BASE
 
-	movl $0, %gs:0x30 /* needed by __morestack */
+	movl $0, %gs:0x30 /* __morestackで必要 */
 
-	/* XXX: Get rust code to prepare the page table */
+	/* BSSをクリア */
+	/* memory::fill32(&__kernel_bss_start, 0, (&__kernel_bss_end - &__kernel_bss_start) / 4) */
+	cld
+	xor %eax, %eax
+	mov $__kernel_bss_start - LINKED_BASE, %edi
+	mov $__kernel_bss_end - LINKED_BASE, %ecx
+	sub %edi, %ecx
+	shr $2, %ecx
+	rep stosl
+
+	/* ページテーブルの準備 */
 	mov $init_stack - LINKED_BASE, %esp
 	push $init_pt - LINKED_BASE
 	call x86_prep_page_table - LINKED_BASE
 	add 4, %esp
 
-	/* Enable paging */
+	/* ページングを有効化 */
 	mov $init_pd - LINKED_BASE, %eax
 	mov %eax, %cr3
+
+	/* 4MBのページングを有効化 */
+	/*mov %cr4, %eax
+	or  $0x00000010, %eax
+	mov %eax, %cr4*/
+
+	/* ページング及び書き込み保護 */
 	mov %cr0, %eax
-	or $0x80010000, %eax      /* PG & WP */
+	or $0x80010000, %eax
 	mov %eax, %cr0
 
-	lgdt GDTPtr
+	mov $init_stack, %esp
+	call x86_pre_init
 
-	/* Jump High and set CS */
-	ljmp $0x08, $start_high
+	/* higherにジャンプしてCSを2*0x08（コードセグメント）にセット */
+	ljmp $2*0x08, $start_high
 .section .text
 .extern kmain
 start_high:
 	/* Clear identity mapping */
 	movl $0, init_pd+0
+	invlpg 0
 
 	/* Prep segment registers */
-	mov $2*0x08, %ax // 2*0x08 is data segment
+	mov $3*0x08, %ax // 3*0x08 is data segment
 	mov %ax, %ss
 	mov %ax, %ds
 	mov %ax, %es
 	mov %ax, %fs
 	mov %ax, %gs
 
-	mov $init_stack, %esp
 	call kmain
 
-	/* If kmain returns, loop forefer */
+	/* If kmain returns, loop forever */
 .l:
 	hlt
 	jmp .l
 
-/* === Page-aligned data === */
-.section .padata
+/* === Read-write data === */
+.section .data
+/*init_pd:
+	.long 0x00000083
+	.rept PDT_INDEX - 1
+		.long 0
+	.endr
+	.long 0x00000083            // 仮想[0x0C0000000] から物理[0x00000000]
+	.long 0x00400083            // 仮想[0x0C0400000] から物理[0x00400000]
+	.long 0x00800083            // 仮想[0x0C0800000] から物理[0x00800000]
+	.long 0x00C00083            // 仮想[0x0C0C00000] から物理[0x00C00000]
+	.long 0x01000083            // 仮想[0x0C1000000] から物理[0x01000000]
+	.rept 0x3FF - (PDT_INDEX - 4)
+		.long 0
+	.endr*/
 init_pd:
 	.long init_pt - LINKED_BASE + 3
 	.rept 768-1
 		.long 0
 	.endr
 	.long init_pt - LINKED_BASE + 3
-	.rept 256-1
+	.long init_pt2 - LINKED_BASE + 3
+	.rept 255-1
 		.long 0
 	.endr
 init_pt:
@@ -105,25 +138,16 @@ init_pt:
 	.rept 1024
 		.long 0
 	.endr
-
-/* === Read-write data === */
-.section .data
+init_pt2:
+	.rept 1024
+		.long 0
+	.endr
 .globl mboot_sig
 .globl mboot_ptr
 mboot_sig:
 	.long 0
 mboot_ptr:
 	.long 0
-GDTPtr:
-	.word GDTEnd - GDT - 1
-	.long GDT
-GDT:
-	.long 0x00000000, 0x00000000	/* 00 NULL Entry */
-	.long 0x0000FFFF, 0x00CF9A00	/* 08 PL0 Code */
-	.long 0x0000FFFF, 0x00CF9200	/* 10 PL0 Data */
-	.long 0x0000FFFF, 0x00CFFA00	/* 18 PL3 Code */
-	.long 0x0000FFFF, 0x00CFF200	/* 20 PL3 Data */
-GDTEnd:
 
 .section .bss
 	.space 0x1000*2

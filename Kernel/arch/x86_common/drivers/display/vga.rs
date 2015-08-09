@@ -1,4 +1,5 @@
 use prelude::*;
+use rt;
 use arch::x86_io::{inb, outb, outw};
 use super::{Color, DisplaySize, Display};
 
@@ -899,7 +900,7 @@ unsafe fn get_seg() -> u16 {
 unsafe fn vmemwr(off: u16, src: &[u8]) {
     let addr = get_seg() * 16 + off;
     //slice::bytes::copy_memory(src, slice::from_raw_parts_mut(addr as *mut u8, src.len()));
-    memcpy(addr as *mut u8, src.as_ptr(), src.len());
+    rt::memcpy(addr as *mut u8, src.as_ptr(), src.len());
 }
 
 unsafe fn set_plane(p: u8) {

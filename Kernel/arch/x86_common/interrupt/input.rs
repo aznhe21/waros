@@ -25,7 +25,7 @@ unsafe fn wait_for_write() -> bool {
 
 mod keyboard {
     use prelude::*;
-    use arch::x86_io::{outb, inb};
+    use arch::x86_io::inb;
     use collections::queue::Queue;
 
     pub enum Key {
@@ -42,8 +42,8 @@ mod keyboard {
     }
 
     fn keyboard_handler(_irq: u32) {
+        super::super::pic::eoi(1);
         unsafe {
-            outb(0x20, 0x61);
             let data = inb(0x60);
             if data != 0xFA {
                 queue.push(data);
@@ -125,9 +125,8 @@ mod mouse {
     }
 
     fn mouse_handler(_irq: u32) {
+        super::super::pic::eoi(12);
         unsafe {
-            outb(0xA0, 0x64);
-            outb(0x20, 0x62);
             queue.push(inb(0x60));
         }
     }
@@ -162,6 +161,7 @@ pub enum Event {
     None
 }
 
+#[inline]
 pub fn init() {
     super::pic::disable_irq(12);// Mouse
     super::pic::disable_irq(1);// Keyboard

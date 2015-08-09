@@ -1,3 +1,4 @@
 target remote localhost:1234
-source Kernel
-symbol-file kernel.x86.bin
+directory ./Kernel
+symbol-file ./grub/kernel.img
+b rust_begin_unwind

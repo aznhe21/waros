@@ -57,23 +57,6 @@ struct InterruptDescriptorTable {
 }
 
 impl InterruptDescriptorTable {
-    /*#[inline(always)]
-    unsafe fn set_gate(&mut self, num: u8, handler: InterruptHandler) {
-        self.set_descriptor(num, handler, DEF_IDT_INT_SELECTOR,
-                            DEF_IDT_FLAGS_PRESENT | DEF_IDT_FLAGS_INTGATE_32BIT);
-    }
-
-    unsafe fn set_descriptor(&mut self, num: u8, handler: InterruptHandler, selector: u16, flags: u8) {
-        let (lo, hi): (u16, u16) = mem::transmute(handler);
-        self.idt[num as usize] = GateDescriptor {
-            base_lo:  lo,
-            selector: selector,
-            reserved: 0x00,
-            flags:    flags,
-            base_hi:  hi
-        }
-    }*/
-
     unsafe fn set_idt(&mut self, idtr: usize, handler: InterruptHandler, flags: u8) {
         let (lo, hi): (u16, u16) = mem::transmute(handler);
         self.idt[idtr] = GateDescriptor {
@@ -101,8 +84,12 @@ impl InterruptDescriptorTable {
     }
 
     unsafe fn load(&mut self) {
-        let size = (mem::size_of::<GateDescriptor>() * IDT_SIZE - 1) as u16;
-        let idtr = Idtr { limit: size, addr: self.idt.as_mut_ptr() as u32 };
+        static mut idtr: Idtr = Idtr { limit: 0, addr: 0 };
+
+        idtr = Idtr {
+            limit: (mem::size_of::<GateDescriptor>() * IDT_SIZE - 1) as u16,
+            addr: self.idt.as_mut_ptr() as u32
+        };
         asm!("lidtl ($0)" :: "r"(&idtr) :: "volatile");
     }
 }
@@ -133,17 +120,17 @@ extern "C" {
 
 #[inline]
 pub unsafe fn pre_init() {
-    let idtr = Idtr { limit: 0, addr: 0 };
+    static mut idtr: Idtr = Idtr { limit: 0, addr: 0 };
     asm!("lidtl ($0)" :: "r"(&idtr) :: "volatile");
 }
 
 #[inline]
 pub unsafe fn init() {
-    for i in 0..IDT_SIZE {
+    for i in 0 .. IDT_SIZE {
         idt.set_exception(i, idt_null_handler);
     }
 
-    //idt.set_gate(INT_GENERAL_PROTECTION_FAULT, segfault_handler);
+    idt.set_exception(0x0E, segfault_handler);
 
     idt.set_interrupt(0x20, irq_handler_0);
     idt.set_interrupt(0x21, irq_handler_1);
@@ -171,7 +158,7 @@ unsafe extern "C" fn segfault_handler() {
 
 #[no_mangle]
 pub unsafe extern "C" fn idt_empty_handler() {
-    log!("Unhandled IDT");
+    panic!("Unhandled interrupt");
 }
 
 pub type IrqHandler = fn(irq: u32) -> ();
