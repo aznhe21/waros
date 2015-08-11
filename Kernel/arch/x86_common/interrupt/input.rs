@@ -33,7 +33,7 @@ mod keyboard {
         Up(u8)
     }
 
-    static mut queue: Queue<'static, u8> = Queue { data: &mut [0; 64], read: 0, write: 0 };
+    static mut queue: Queue<'static, u8> = queue_init!(0; 64);
 
     pub fn init() {
         unsafe {
@@ -112,7 +112,7 @@ mod mouse {
         true
     }
 
-    static mut queue: Queue<'static, u8> = Queue { data: &mut [0; 64], read: 0, write: 0 };
+    static mut queue: Queue<'static, u8> = queue_init!(0; 64);
 
     pub fn init() {
         unsafe {

@@ -21,11 +21,13 @@ impl<'a, T> Queue<'a, T> {
         }
     }
 
+    #[inline]
     pub fn clear(&mut self) {
         self.read = 0;
         self.write = 0;
     }
 
+    #[inline]
     pub fn len(&self) -> usize {
         if self.write >= self.read {
             self.write - self.read
@@ -34,17 +36,14 @@ impl<'a, T> Queue<'a, T> {
         }
     }
 
+    #[inline]
     pub fn is_empty(&self) -> bool { self.read == self.write }
 
     pub fn push(&mut self, value: T) {
         let cur = self.write;
-        self.write = if self.write + 1 >= self.data.len() {
-            0
-        } else {
-            self.write + 1
-        };
+        self.write = self.step(self.write);
         if self.read == self.write {
-            self.read += 1;
+            self.read = self.step(self.read);
             log!("Queue overflowed");
         }
 
@@ -54,11 +53,7 @@ impl<'a, T> Queue<'a, T> {
     pub fn pop(&mut self) -> Option<T> {
         if self.read != self.write {
             let cur = self.read;
-            self.read = if self.read + 1 >= self.data.len() {
-                0
-            } else {
-                self.read + 1
-            };
+            self.read = self.step(self.read);
 
             let mut ret: T = unsafe { mem::uninitialized() };
             mem::swap(&mut self.data[cur], &mut ret);
@@ -81,15 +76,14 @@ impl<'a, T> Queue<'a, T> {
             None
         }
     }
-}
 
-macro_rules! queue_init {
-    () => (
-        Queue {
-            data: &mut [],
-            read: 0,
-            write: 0
+    #[inline]
+    fn step(&self, val: usize) -> usize {
+        if val + 1 < self.data.len() {
+            val + 1
+        } else {
+            0
         }
-    )
+    }
 }
 

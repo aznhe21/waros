@@ -25,22 +25,13 @@ macro_rules! debug_log {
     ($($arg:tt)*) => (if cfg!(debug_assertions) { log!($($arg)*); })
 }
 
-/*
- * int!(0x00, < { "eax" = hoge }, > { hoge = "eax" });
- */
-macro_rules! int {
-    ( $no:expr ) => {
-        asm!(concat!("int $", $no));
-    };
-    ( $no:expr, < { $($reg1:tt = $val1:expr),* }, > { $($val2:ident = $reg2:tt),* }) => ({
-        $(
-            asm!(concat!("mov $0, %", $reg1) :: "i"($val1) :: "volatile");
-        )*
-        asm!(concat!("int $$", $no) :::: "volatile");
-        //asm!("mov %al, $0" : "=r"(ax) ::: "volatile");
-        $(
-            asm!(concat!("mov $0, %", $reg2) : "=r"($val2) ::: "volatile");
-        )*
-    });
+macro_rules! queue_init {
+    ($data: expr; $len: expr) => (
+        Queue {
+            data: &mut [$data; $len],
+            read: 0,
+            write: 0
+        }
+    )
 }
 
