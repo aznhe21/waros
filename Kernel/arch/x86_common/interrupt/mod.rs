@@ -3,7 +3,7 @@
 pub mod gdt;
 pub mod idt;
 pub mod pic;
-pub mod rtc;
+pub mod pit;
 
 mod a20;
 pub mod input;
@@ -62,7 +62,7 @@ pub fn pre_init() {
         gdt::pre_init();
         idt::pre_init();
         pic::pre_init();
-        rtc::pre_init();
+        pit::pre_init();
 
         a20::enable();
         cli();
@@ -75,7 +75,7 @@ pub fn init() {
         gdt::init();
         idt::init();
         pic::init();
-        rtc::init();
+        pit::init();
         input::init();
     }
 }

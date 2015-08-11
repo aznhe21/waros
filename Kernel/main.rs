@@ -106,11 +106,11 @@ pub fn kmain() -> ! {
 
         match arch::interrupt::input::get() {
             Event::Keyboard(Key::Down(code)) => {
-                log!("Key down: {:02x}", code);
+                log!("Key down: {:02X}", code);
             },
             Event::Keyboard(Key::Up(code)) => {
                 // keyup
-                log!("Key up: {:02x}", code);
+                log!("Key up: {:02X}", code);
 
                 match code {
                     0x01 => {// Esc
@@ -119,7 +119,10 @@ pub fn kmain() -> ! {
                     0x1C => {// Enter
                         let color = Color::from_u8(color).unwrap();
                         display.clear(color);
-                    }
+                    },
+                    0x39 => {// Space
+                        log!("Counter: {}", arch::interrupt::pit::counter());
+                    },
                     _ => {}
                 }
             },

@@ -1,4 +1,5 @@
 use arch::x86_io::outb;
+use core::intrinsics;
 
 const PIT_REG_COUNTER0: u16 = 0x0040;
 const PIT_REG_COUNTER1: u16 = 0x0041;
@@ -36,13 +37,14 @@ const PIT_COM_COUNTER0: u8 = 0x00;
 const PIT_COM_COUNTER1: u8 = 0x40;
 const PIT_COM_COUNTER2: u8 = 0x80;
 
+const FREQ: u32 = 100;
+
 #[inline(always)]
 pub unsafe fn pre_init() {
 }
 
 #[inline]
 pub unsafe fn init() {
-    const FREQ: u32 = 100;
     const COUNTER: u16 = (PIT_CLOCK / FREQ) as u16;
     const COMMAND: u8 = PIT_COM_COUNTER0 | PIT_COM_RL_DATA | PIT_COM_MODE_SQUAREWAVE;
 
@@ -50,11 +52,21 @@ pub unsafe fn init() {
     outb(PIT_REG_COUNTER0, (COUNTER >> 0 & 0xFF) as u8);
     outb(PIT_REG_COUNTER0, (COUNTER >> 8 & 0xFF) as u8);
 
-    super::idt::set_handler(0, rtc_handler);
+    super::idt::set_handler(0, pit_handler);
     super::pic::enable_irq(0);
 }
 
-fn rtc_handler(_irq: u32) {
+static mut count: usize = 0;
+
+fn pit_handler(_irq: u32) {
     super::pic::eoi(0);
+    unsafe {
+        count = intrinsics::overflowing_add(count, 1000 / FREQ as usize);
+    }
+}
+
+#[inline(always)]
+pub fn counter() -> usize {
+    unsafe { count }
 }
 
