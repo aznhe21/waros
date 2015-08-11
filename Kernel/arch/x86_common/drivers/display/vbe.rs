@@ -3,7 +3,6 @@ use multiboot;
 use memory;
 use arch::page;
 use memory::kernel::PhysAddr;
-use num_traits::Unsigned;
 use super::{Color, DisplaySize, Display};
 use core::{u8, u16, u32};
 use core::ops::Range;
@@ -15,14 +14,6 @@ pub struct Vbe {
 
 impl Vbe {
     pub fn new() -> Vbe {
-        /*unsafe {
-            let ginfo = multiboot::info().vbe_controller_info().expect("VBE should be supported");
-
-            if !ginfo.valid() || ginfo.version < 0x0102 {
-                panic!("VESA is not supported");
-            }
-        }*/
-
         super::set_rgb_palette();
 
         let vbe = Vbe {
@@ -30,12 +21,17 @@ impl Vbe {
             minfo: multiboot::info().vbe_mode_info().unwrap()
         };
 
-        assert_eq!(match (vbe.minfo.rmask, vbe.minfo.gmask, vbe.minfo.bmask) {
-            (8, 8, 8) => u32::BITS,
-            (5, 6, 5) => u16::BITS,
-            (5, 5, 5) => u16::BITS,
-            _         => u8::BITS
-        }, vbe.minfo.bpp as usize);
+        assert!(
+            match (vbe.minfo.rmask, vbe.minfo.gmask, vbe.minfo.bmask, vbe.minfo.resv_mask) {
+                (8, 8, 8, 8) => u32::BITS,
+                (8, 8, 8, 0) => 24,
+                (5, 6, 5, 0) => u16::BITS,
+                (5, 5, 5, 0) => u16::BITS,
+                _            => u8::BITS
+            } == vbe.minfo.bpp as usize,
+            "assertion failed: VBE Mask: Red={}, Green={}, Blue={}, Reserve={}, Bpp={}",
+            vbe.minfo.rmask, vbe.minfo.gmask, vbe.minfo.bmask, vbe.minfo.resv_mask, vbe.minfo.bpp
+        );
 
         let res = vbe.minfo.h_res as usize * vbe.minfo.v_res as usize;
         unsafe {
@@ -63,7 +59,7 @@ impl Vbe {
     }
 
     #[inline]
-    fn put_by_uint<T: Unsigned + Copy>(&self, color: T, x: DisplaySize, y: DisplaySize) {
+    fn put_by_uint<T: Copy>(&self, color: T, x: DisplaySize, y: DisplaySize) {
         debug_assert!(x >= 0 && x < self.width());
         debug_assert!(y >= 0 && y < self.height());
 
@@ -75,7 +71,7 @@ impl Vbe {
     }
 
     #[inline]
-    fn horizontal_line_by_uint<T : Unsigned + Copy>(&self, color: T, range: Range<DisplaySize>, y: DisplaySize) {
+    fn horizontal_line_by_uint<T : Copy>(&self, color: T, range: Range<DisplaySize>, y: DisplaySize) {
         debug_assert!(range.start >= 0 && range.end < self.width());
         debug_assert!(y >= 0 && y < self.height());
 
@@ -88,26 +84,27 @@ impl Vbe {
         }
     }
 
-    /*#[inline]
-    fn clear_by_uint<T : Unsigned + Copy>(&self, color: T) {
+    #[inline]
+    fn clear_by_uint<T : Copy>(&self, color: T) {
         let vram = self.vram::<T>();
         for i in 0 .. self.width() as usize * self.height() as usize {
             unsafe {
                 *vram.uoffset(i) = color;
             }
         }
-    }*/
+    }
 }
 
 macro_rules! delegate {
     ($name:ident($($arg_name:ident : $arg_type:ty),*) => $to:ident) => {
         fn $name(&self, color: Color $(, $arg_name: $arg_type)*) {
             let rgb = color.as_rgb();
-            match (self.minfo.rmask, self.minfo.gmask, self.minfo.bmask) {
-                (8, 8, 8) => self.$to(rgb.as_c32() $(, $arg_name)*),
-                (5, 6, 5) => self.$to(rgb.as_c16() $(, $arg_name)*),
-                (5, 5, 5) => self.$to(rgb.as_c15() $(, $arg_name)*),
-                _         => self.$to(rgb.as_c8() $(, $arg_name)*),
+            match (self.minfo.rmask, self.minfo.gmask, self.minfo.bmask, self.minfo.resv_mask) {
+                (8, 8, 8, 8) => self.$to(rgb.as_c32() $(, $arg_name)*),
+                (8, 8, 8, 0) => self.$to(rgb          $(, $arg_name)*),
+                (5, 6, 5, 0) => self.$to(rgb.as_c16() $(, $arg_name)*),
+                (5, 5, 5, 0) => self.$to(rgb.as_c15() $(, $arg_name)*),
+                _            => self.$to(rgb.as_c8() $(, $arg_name)*),
             }
         }
     }
@@ -120,9 +117,11 @@ impl Display for Vbe {
 
     fn log(&self) {
         log!("Display: {}x{}@{}bpp", self.minfo.h_res, self.minfo.v_res, self.minfo.bpp);
-        log!("Mask: Red={}, Green={}, Blue={}", self.minfo.rmask, self.minfo.gmask, self.minfo.bmask);
+        log!("Mask: Red={}, Green={}, Blue={}, Reserve={}", self.minfo.rmask, self.minfo.gmask, self.minfo.bmask,
+             self.minfo.resv_mask);
     }
 
+    #[inline]
     fn resolution(&self) -> (DisplaySize, DisplaySize) {
         (self.width(), self.height())
     }
@@ -134,11 +133,12 @@ impl Display for Vbe {
     fn clear(&self, color: Color) {
         let rgb = color.as_rgb();
         let size = self.width() as usize * self.height() as usize;
-        match (self.minfo.rmask, self.minfo.gmask, self.minfo.bmask) {
-            (8, 8, 8) => unsafe { memory::fill32(self.vram(), rgb.as_c32(), size) },
-            (5, 6, 5) => unsafe { memory::fill16(self.vram(), rgb.as_c16(), size) },
-            (5, 5, 5) => unsafe { memory::fill16(self.vram(), rgb.as_c15(), size) },
-            _         => unsafe { memory::fill8(self.vram(), rgb.as_c8(), size) }
+        match (self.minfo.rmask, self.minfo.gmask, self.minfo.bmask, self.minfo.resv_mask) {
+            (8, 8, 8, 8) => unsafe { memory::fill32(self.vram(), rgb.as_c32(), size) },
+            (8, 8, 8, 0) => self.clear_by_uint(rgb),
+            (5, 6, 5, 0) => unsafe { memory::fill16(self.vram(), rgb.as_c16(), size) },
+            (5, 5, 5, 0) => unsafe { memory::fill16(self.vram(), rgb.as_c15(), size) },
+            _            => unsafe { memory::fill8(self.vram(), rgb.as_c8(), size) }
         }
     }
 }

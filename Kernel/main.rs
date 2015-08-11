@@ -151,8 +151,8 @@ pub fn kmain() -> ! {
                 let pcolor = Color::from_u8(color).unwrap();
                 if clicking {
                     let l = cmp::max(0, mouse_pos.0 - 4);        // 左端を切り上げ
-                    //let r = cmp::min(mouse_pos.0 + 4, res.0 - 1);// 右端を切り捨て
-                    let r = mouse_pos.0 + 4;
+                    let r = cmp::min(mouse_pos.0 + 4, res.0 - 1);// 右端を切り捨て
+                    //let r = mouse_pos.0 + 4;
                     let t = cmp::max(0, mouse_pos.1 - 4);        // 上端を切り上げ
                     let b = cmp::min(mouse_pos.1 + 4, res.1 - 1);// 下端を切り捨て
                     display.fill(pcolor, (l, t, r - l, b - t));
