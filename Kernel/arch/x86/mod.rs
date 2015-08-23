@@ -13,7 +13,6 @@
 
 use prelude::*;
 use memory::kernel::VirtAddr;
-use core::mem;
 use core::fmt::Write;
 use logging::Writer;
 
@@ -45,14 +44,14 @@ extern {
 
 #[inline(always)]
 pub fn kernel_start() -> VirtAddr {
-    let addr: u32 = unsafe { mem::transmute(&__kernel_start) };
-    VirtAddr::from_raw(addr as usize - 0x00100000)
+    let addr = &__kernel_start as *const () as usize;
+    VirtAddr::from_raw(addr - 0x00100000)
 }
 
 #[inline(always)]
 pub fn kernel_end() -> VirtAddr {
-    let addr: u32 = unsafe { mem::transmute(&__kernel_end) };
-    VirtAddr::from_raw(addr as usize)
+    let addr = &__kernel_end as *const () as usize;
+    VirtAddr::from_raw(addr)
 }
 
 #[inline(always)]
@@ -80,42 +79,6 @@ pub fn x86_pre_init() {
     }*/
 }
 
-/*#[inline(always)]
-pub fn indirect_pointer<T>(ptr: *const T) -> *const T {
-    (ptr as usize + KERNEL_BASE) as *const T
-}
-
-#[inline(always)]
-pub fn indirect_pointer_mut<T>(ptr: *mut T) -> *mut T {
-    (ptr as usize + KERNEL_BASE) as *mut T
-}
-
-#[inline(always)]
-pub unsafe fn indirect_unwrap<T>(ptr: *const T) -> &'static T {
-    &*indirect_pointer(ptr)
-}
-
-#[inline(always)]
-pub unsafe fn indirect_unwrap_mut<T>(ptr: *mut T) -> &'static T {
-    &*indirect_pointer_mut(ptr)
-}*/
-
-#[inline(always)]
-pub unsafe extern "C" fn begin_memory_direct_access() {
-    // Enable cache
-    let cr0: u32;
-    asm!("movl %cr0, %eax" : "={eax}"(cr0) ::: "volatile");
-    asm!("movl %eax, %cr0" :: "{eax}"(cr0 | 0x60000000) :: "volatile");
-}
-
-#[inline(always)]
-pub unsafe extern "C" fn end_memory_direct_access() {
-    // Disable cache
-    let cr0: u32;
-    asm!("movl %cr0, %eax" : "={eax}"(cr0) ::: "volatile");
-    asm!("movl %eax, %cr0" :: "{ax}"(cr0 & !0x60000000) :: "volatile");
-}
-
 pub fn print_backtrace() {
     let mut bp: u32;
     unsafe {
@@ -135,7 +98,7 @@ pub fn backtrace(bp: u32) -> Option<(u32, u32)> {
     if bp == 0 || bp % 4 != 0 {
         None
     } else {
-        let ptr: *const [u32; 2] = unsafe { mem::transmute(bp) };
+        let ptr = bp as *const [u32; 2];
         let newbp = unsafe { (*ptr)[0] };
         let newip = unsafe { (*ptr)[1] };
         if newbp <= bp {

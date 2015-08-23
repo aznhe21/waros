@@ -5,6 +5,7 @@ use rt;
 use arch;
 use core::mem;
 use core::slice;
+use core::str;
 use core::fmt;
 
 const MULTIBOOT_HEADER_MAGIC:     u32 = 0x1BADB002;
@@ -58,26 +59,6 @@ pub fn init() {
     info.vbe_mode_info += arch::KERNEL_BASE as u32;
 }
 
-/*#[cfg(target_arch="x86")]
-pub fn bootloader_memory_size() -> usize {
-    unsafe {
-        log!("{:x}", mboot_ptr as usize);
-        let p: *mut multiboot_info = mem::transmute(mboot_ptr as usize + 0xC0000000);
-        log!("{:x}", (*mboot_ptr).mem_lower);
-        log!("{:x}", (*mboot_ptr).mem_upper);
-        0
-        //(*mboot_ptr).mem_lower as usize
-    }
-}
-
-#[cfg(target_arch="x86_64")]
-pub fn bootloader_memory_size() -> usize {
-    unsafe {
-        log!("{}", (*mboot_ptr).mem_lower);
-        (*mboot_ptr).mem_lower as usize | ((*mboot_ptr).mem_upper as usize) << 32
-    }
-}*/
-
 #[repr(C, packed)]
 pub struct MultibootInfo {
     flags: u32,
@@ -123,9 +104,9 @@ impl MultibootInfo {
     // 2: cmdline
     pub fn str_cmdline(&self) -> &'static str {
         if self.has(2) {
+            let ptr = self.cmdline as *const u8;
             unsafe {
-                let ptr = self.cmdline as *const u8;
-                mem::transmute(slice::from_raw_parts(ptr, rt::strlen(ptr)))
+                str::from_utf8_unchecked(slice::from_raw_parts(ptr, rt::strlen(ptr)))
             }
         } else {
             ""
@@ -193,7 +174,7 @@ impl MultibootInfo {
     }
 }
 
-#[repr(C)]
+#[repr(C, packed)]
 pub struct AoutSymbolTable {
     pub tabsize: u32,
     pub strsize: u32,
@@ -201,7 +182,7 @@ pub struct AoutSymbolTable {
     pub reserved: u32
 }
 
-#[repr(C)]
+#[repr(C, packed)]
 pub struct ElfSectionHeaderTable {
     pub num: u32,
     pub size: u32,
@@ -209,7 +190,7 @@ pub struct ElfSectionHeaderTable {
     pub shndx: u32
 }
 
-#[repr(C)]
+#[repr(u32)]
 #[derive(Clone, Copy, PartialEq, PartialOrd)]
 pub enum MemoryType {
     Usable = 1,
@@ -237,7 +218,7 @@ impl fmt::Display for MemoryType {
     }
 }
 
-#[repr(C)]
+#[repr(C, packed)]
 pub struct MemoryMap {
     // この構造体のサイズ(20)
     pub size: u32,
@@ -249,7 +230,7 @@ pub struct MemoryMap {
     pub type_: MemoryType
 }
 
-#[repr(C)]
+#[repr(C, packed)]
 pub struct ModList {
     pub start: u32,
     pub end: u32,
@@ -257,7 +238,7 @@ pub struct ModList {
     pub pad: u32
 }
 
-#[repr(C)]
+#[repr(C, packed)]
 pub struct VbeControllerInfo {
     pub signature: u32,
     pub version: u16,
@@ -282,35 +263,35 @@ impl VbeControllerInfo {
     }
 
     pub fn str_vendor_string(&self) -> &'static str {
+        let ptr = self.vendor_string as *const u8;
         unsafe {
-            let ptr = self.vendor_string as *const u8;
-            mem::transmute(slice::from_raw_parts(ptr, rt::strlen(ptr)))
+            str::from_utf8_unchecked(slice::from_raw_parts(ptr, rt::strlen(ptr)))
         }
     }
 
     pub fn str_vendor_name(&self) -> &'static str {
+        let ptr = self.vendor_name as *const u8;
         unsafe {
-            let ptr = self.vendor_name as *const u8;
-            mem::transmute(slice::from_raw_parts(ptr, rt::strlen(ptr)))
+            str::from_utf8_unchecked(slice::from_raw_parts(ptr, rt::strlen(ptr)))
         }
     }
 
     pub fn str_product_name(&self) -> &'static str {
+        let ptr = self.product_name as *const u8;
         unsafe {
-            let ptr = self.product_name as *const u8;
-            mem::transmute(slice::from_raw_parts(ptr, rt::strlen(ptr)))
+            str::from_utf8_unchecked(slice::from_raw_parts(ptr, rt::strlen(ptr)))
         }
     }
 
     pub fn str_product_rev(&self) -> &'static str {
+        let ptr = self.product_rev as *const u8;
         unsafe {
-            let ptr = self.product_rev as *const u8;
-            mem::transmute(slice::from_raw_parts(ptr, rt::strlen(ptr)))
+            str::from_utf8_unchecked(slice::from_raw_parts(ptr, rt::strlen(ptr)))
         }
     }
 }
 
-#[repr(C)]
+#[repr(C, packed)]
 pub struct VbeModeInfo {
     pub mode_attr: u16,
     pub win_attr: [u8; 2],

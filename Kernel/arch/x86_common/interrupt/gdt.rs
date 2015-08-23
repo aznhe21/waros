@@ -5,14 +5,13 @@ extern "C" {
     fn flush_gdt();
 }
 
-#[repr(packed)]
+#[repr(C, packed)]
 struct Gdtr {
     len: u16,
     ptr: u32
 }
 
-#[inline(always)]
-fn gdt_entry(base: u32, limit: u32, flags: u16) -> u64 {
+const fn gdt_entry(base: u32, limit: u32, flags: u16) -> u64 {
     ((base  as u64 & 0xFF000000) << (56 - 24)) |  // 56-63
     ((flags as u64 & 0x0000F0FF) << 40) |         // 40-47, 52-55
     ((limit as u64 & 0x000F0000) << (48 - 16)) |  // 48-51

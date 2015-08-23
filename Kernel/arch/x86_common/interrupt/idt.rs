@@ -34,7 +34,7 @@ const DEF_IDT_FLAGS_PRESENT:       u8 = 0x80;
 
 const IDT_SIZE: usize = 256;
 
-#[repr(packed)]
+#[repr(C, packed)]
 #[derive(Clone, Copy)]
 struct GateDescriptor {
     offset_lo: u16,
@@ -44,7 +44,7 @@ struct GateDescriptor {
     offset_hi: u16
 }
 
-#[repr(packed)]
+#[repr(C, packed)]
 struct Idtr {
     limit: u16,
     addr:  u32

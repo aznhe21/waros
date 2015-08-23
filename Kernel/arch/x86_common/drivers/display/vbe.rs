@@ -34,10 +34,10 @@ impl Vbe {
         );
 
         let res = vbe.minfo.h_res as usize * vbe.minfo.v_res as usize;
+        let vram = vbe.minfo.phys_base_ptr as usize;
+        let vram_end = vram + res * vbe.minfo.bpp as usize;
         unsafe {
-            let vram = vbe.vram::<u8>();
-            let vram_end = vram.uoffset(res * vbe.minfo.bpp as usize);
-            page::kernel_pt.map_direct(3, 3, PhysAddr::from_mut_ptr(vram) .. PhysAddr::from_mut_ptr(vram_end));
+            page::kernel_pt.map_direct(3, 3, PhysAddr::from_raw(vram) .. PhysAddr::from_raw(vram_end));
         }
 
         vbe

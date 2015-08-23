@@ -13,7 +13,7 @@
 #![feature(asm)]	//< As a kernel, we need inline assembly
 #![feature(core)]	//< libcore (see below) is not yet stablized
 #![feature(alloc)]	//< liballoc (see below) is not yet stablized
-#![feature(associated_consts)]
+#![feature(associated_consts, const_fn)]
 #![feature(core_intrinsics, core_prelude, core_slice_ext, core_str_ext, ptr_as_ref)]
 #![feature(zero_one, num_bits_bytes, step_by)]
 
