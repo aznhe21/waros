@@ -1,4 +1,5 @@
 use prelude::*;
+use super::pic::IRQ;
 use core::mem;
 
 const INT_DIVISION_BY_ZERO:             u8 = 0x00;
@@ -161,22 +162,20 @@ pub unsafe extern "C" fn idt_empty_handler() {
     panic!("Unhandled interrupt");
 }
 
-pub type IrqHandler = fn(irq: u32) -> ();
+pub type IrqHandler = fn(irq: IRQ) -> ();
 static mut irq_handlers: [IrqHandler; 16] = [irq_null_handler; 16];
 
 #[inline(always)]
-pub unsafe fn set_handler(irq: usize, handler: IrqHandler) {
-    irq_handlers[irq] = handler;
+pub unsafe fn set_handler(irq: IRQ, handler: IrqHandler) {
+    irq_handlers[irq as usize] = handler;
 }
 
-fn irq_null_handler(irq: u32) {
-    log!("Unhandled IRQ: {}", irq);
+fn irq_null_handler(irq: IRQ) {
+    log!("Unhandled IRQ: {}", irq as u8);
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn irq_common_handler(irq: u32) {
+pub unsafe extern "C" fn irq_common_handler(irq: IRQ) {
     irq_handlers[irq as usize](irq);
-    //outb(0x20, 0x20);
-    //outb(0xA0, 0x20);
 }
 

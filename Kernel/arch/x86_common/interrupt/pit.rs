@@ -1,4 +1,5 @@
 use arch::x86_io::outb;
+use super::pic::IRQ;
 use core::intrinsics;
 
 const PIT_REG_COUNTER0: u16 = 0x0040;
@@ -52,14 +53,14 @@ pub unsafe fn init() {
     outb(PIT_REG_COUNTER0, (COUNTER >> 0 & 0xFF) as u8);
     outb(PIT_REG_COUNTER0, (COUNTER >> 8 & 0xFF) as u8);
 
-    super::idt::set_handler(0, pit_handler);
-    super::pic::enable_irq(0);
+    super::idt::set_handler(IRQ::PIT, pit_handler);
+    IRQ::PIT.enable();
 }
 
 static mut count: usize = 0;
 
-fn pit_handler(_irq: u32) {
-    super::pic::eoi(0);
+fn pit_handler(_irq: IRQ) {
+    IRQ::PIT.eoi();
     unsafe {
         count = intrinsics::overflowing_add(count, 1000 / FREQ as usize);
     }

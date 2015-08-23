@@ -1,5 +1,6 @@
 use arch::x86_io::inb;
 pub use self::keyboard::Key;
+use super::pic::IRQ;
 pub use self::mouse::Mouse;
 
 const TIMEOUT: usize = 50000;
@@ -27,6 +28,8 @@ mod keyboard {
     use prelude::*;
     use arch::x86_io::inb;
     use collections::queue::Queue;
+    use super::super::idt;
+    use super::super::pic::IRQ;
 
     pub enum Key {
         Down(u8),
@@ -37,12 +40,12 @@ mod keyboard {
 
     pub fn init() {
         unsafe {
-            super::super::idt::set_handler(1, keyboard_handler);
+            idt::set_handler(IRQ::Keyboard, keyboard_handler);
         }
     }
 
-    fn keyboard_handler(_irq: u32) {
-        super::super::pic::eoi(1);
+    fn keyboard_handler(_irq: IRQ) {
+        IRQ::Keyboard.eoi();
         unsafe {
             let data = inb(0x60);
             if data != 0xFA {
@@ -71,6 +74,8 @@ mod mouse {
     use prelude::*;
     use arch::x86_io::{outb, inb};
     use collections::queue::Queue;
+    use super::super::idt;
+    use super::super::pic::IRQ;
 
     pub struct Mouse {
         pub x: i32,
@@ -120,12 +125,12 @@ mod mouse {
                 panic!("Failed to initialize the mouse");
             }
 
-            super::super::idt::set_handler(12, mouse_handler);
+            idt::set_handler(IRQ::Mouse, mouse_handler);
         }
     }
 
-    fn mouse_handler(_irq: u32) {
-        super::super::pic::eoi(12);
+    fn mouse_handler(_irq: IRQ) {
+        IRQ::Mouse.eoi();
         unsafe {
             queue.push(inb(0x60));
         }
@@ -163,14 +168,14 @@ pub enum Event {
 
 #[inline]
 pub fn init() {
-    super::pic::disable_irq(12);// Mouse
-    super::pic::disable_irq(1);// Keyboard
+    IRQ::Mouse.disable();
+    IRQ::Keyboard.disable();
 
     keyboard::init();
     mouse::init();
 
-    super::pic::enable_irq(1);// Keyboard
-    super::pic::enable_irq(12);// Mouse
+    IRQ::Keyboard.enable();
+    IRQ::Mouse.enable();
 }
 
 pub fn get() -> Event {
