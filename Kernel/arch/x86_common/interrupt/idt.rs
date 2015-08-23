@@ -101,6 +101,9 @@ static mut idt: InterruptDescriptorTable = InterruptDescriptorTable {
 
 extern "C" {
     fn idt_null_handler();
+    fn idt_0c_handler();
+    fn idt_0e_handler();
+
     fn irq_handler_0();
     fn irq_handler_1();
     fn irq_handler_2();
@@ -131,7 +134,8 @@ pub unsafe fn init() {
         idt.set_exception(i, idt_null_handler);
     }
 
-    idt.set_exception(0x0E, segfault_handler);
+    idt.set_exception(0x0C, idt_0c_handler);
+    idt.set_exception(0x0E, idt_0e_handler);
 
     idt.set_interrupt(0x20, irq_handler_0);
     idt.set_interrupt(0x21, irq_handler_1);
@@ -153,13 +157,19 @@ pub unsafe fn init() {
     idt.load();
 }
 
-unsafe extern "C" fn segfault_handler() {
-    log!("Segfault");
-}
-
 #[no_mangle]
 pub unsafe extern "C" fn idt_empty_handler() {
     panic!("Unhandled interrupt");
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn stack_segment_fault_handler(code: u32) {
+    panic!("Stack-segment fault {}", code);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn page_fault_handler(esp: *const u32, address: u32) {
+    panic!("Page fault {} to {:X} at {:X}", *esp.uoffset(0), address, *esp.uoffset(1));
 }
 
 pub type IrqHandler = fn(irq: IRQ) -> ();

@@ -1,9 +1,10 @@
 .section .text
 .globl idt_null_handler
-.globl irq_handlers_begin
-.globl irq_handlers_end
+.globl idt_0c_handler
+.globl idt_0e_handler
 .extern idt_empty_handler
-.extern irq_common_handler
+.extern page_fault_handler
+.extern stack_segment_fault_handler
 
 idt_null_handler:
 	pusha
@@ -11,8 +12,30 @@ idt_null_handler:
 	popa
 	iret
 
+idt_0c_handler:
+	pusha
+	push 32(%esp)
+	call stack_segment_fault_handler
+	add $4, %esp
+	popa
+	iret
+
+idt_0e_handler:
+	pusha
+	mov %cr2, %eax
+	push %eax
+	mov %esp, %eax
+	add $(32+4), %eax
+	push %eax
+	call page_fault_handler
+	add $8, %esp
+	popa
+	iret
+
 .macro define_irq_handler index
 .globl irq_handler_\index
+.extern irq_common_handler
+
 irq_handler_\index:
 	pusha
 	pushl $\index
