@@ -25,13 +25,3 @@ macro_rules! debug_log {
     ($($arg:tt)*) => (if cfg!(debug_assertions) { log!($($arg)*); })
 }
 
-macro_rules! queue_init {
-    ($data: expr; $len: expr) => (
-        Queue {
-            data: &mut [$data; $len],
-            read: 0,
-            write: 0
-        }
-    )
-}
-

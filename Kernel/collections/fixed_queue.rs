@@ -3,18 +3,15 @@
 use prelude::*;
 use core::mem;
 
-pub struct Queue<'a, T: 'a> {
-    #[doc(hidden)]
-    pub data: &'a mut [T],
-    #[doc(hidden)]
-    pub read: usize,
-    #[doc(hidden)]
-    pub write: usize
+pub struct FixedQueue<'a, T: 'a> {
+    data: &'a mut [T],
+    read: usize,
+    write: usize
 }
 
-impl<'a, T> Queue<'a, T> {
-    pub fn new(data: &'a mut [T]) -> Queue<T> {
-        Queue {
+impl<'a, T> FixedQueue<'a, T> {
+    pub const fn new(data: &'a mut [T]) -> FixedQueue<T> {
+        FixedQueue {
             data: data,
             read: 0,
             write: 0
@@ -44,7 +41,7 @@ impl<'a, T> Queue<'a, T> {
         self.write = self.step(self.write);
         if self.read == self.write {
             self.read = self.step(self.read);
-            log!("Queue overflowed");
+            log!("FixedQueue overflowed");
         }
 
         self.data[cur] = value;

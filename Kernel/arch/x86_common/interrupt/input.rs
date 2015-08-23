@@ -27,7 +27,7 @@ unsafe fn wait_for_write() -> bool {
 mod keyboard {
     use prelude::*;
     use arch::x86_io::inb;
-    use collections::queue::Queue;
+    use collections::FixedQueue;
     use super::super::idt;
     use super::super::pic::IRQ;
 
@@ -36,7 +36,7 @@ mod keyboard {
         Up(u8)
     }
 
-    static mut queue: Queue<'static, u8> = queue_init!(0; 64);
+    static mut queue: FixedQueue<'static, u8> = FixedQueue::new(&mut [0; 64]);
 
     pub fn init() {
         unsafe {
@@ -73,7 +73,7 @@ mod keyboard {
 mod mouse {
     use prelude::*;
     use arch::x86_io::{outb, inb};
-    use collections::queue::Queue;
+    use collections::FixedQueue;
     use super::super::idt;
     use super::super::pic::IRQ;
 
@@ -117,7 +117,7 @@ mod mouse {
         true
     }
 
-    static mut queue: Queue<'static, u8> = queue_init!(0; 64);
+    static mut queue: FixedQueue<'static, u8> = FixedQueue::new(&mut [0; 64]);
 
     pub fn init() {
         unsafe {
