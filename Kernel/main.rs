@@ -81,6 +81,7 @@ pub fn kmain() -> ! {
     memory::init_by_multiboot(multiboot::info().mmap().expect("Memory map not provided"));
     timer::init();
     arch::interrupt::init();
+    arch::task::init();
 
     log!("Total: {} MB Free: {} MB", memory::buddy::manager().total_size() / 1024 / 1024,
         memory::buddy::manager().free_size() / 1024 / 1024);
@@ -93,8 +94,17 @@ pub fn kmain() -> ! {
     let mut clicking = false;
     let mut color: u8 = 1;
 
+    let (mut pri_count, mut a_count) = ((0usize, 0usize), (0usize, 0usize));
+
+    arch::task::manager().add(task_a, &mut a_count.1);
+    arch::task::manager().reset_timer();
+
+    let disp_timer = timer::manager().by_queue(event::queue());
+    disp_timer.reset(1000);
+
     loop {
         arch::interrupt::cli();
+        pri_count.1 += 1;
 
         match event::Event::get() {
             Event::Device(Device::KeyDown(code)) => {
@@ -161,11 +171,31 @@ pub fn kmain() -> ! {
                 }
             },
             Event::Timer(timer_id) => {
-                log!("Timer {}", timer_id);
+                match timer_id {
+                    _ if timer_id == disp_timer.id() => {
+                        log!("Primary: {}, A: {}", pri_count.1 - pri_count.0, a_count.1 - a_count.0);
+                        pri_count.0 = pri_count.1;
+                        a_count.0 = a_count.1;
+                        disp_timer.reset(1000);
+                    },
+                    _ => log!("Timer {}", timer_id)
+                }
             },
             _ => {
-                arch::interrupt::sti_hlt();
+                //arch::interrupt::sti_hlt();
+                arch::interrupt::sti();
             }
         }
     }
 }
+
+extern "C" fn task_a(a_count: &mut usize) {
+    use core::intrinsics;
+    log!("Task-A has launched");
+    loop {
+        unsafe {
+            intrinsics::volatile_store(a_count, intrinsics::overflowing_add(intrinsics::volatile_load(a_count), 1));
+        }
+    }
+}
+

@@ -95,7 +95,7 @@ $(OBJDIR)start.o: arch/$(ARCH)/start.S
 	$(AS) $(ASFLAGS) -o $@ $<
 
 # Compile architecture's assembly stub
-$(OBJDIR)asm.o: arch/$(ARCH)/memory.S arch/$(ARCH)/interrupt/handlers.S arch/$(ARCH)/interrupt/flush_gdt.S
+$(OBJDIR)asm.o: arch/$(ARCH)/memory.S arch/$(ARCH)/interrupt/handlers.S arch/$(ARCH)/interrupt/jump.S
 	@mkdir -p $(dir $@)
 	$(AS) $(ASFLAGS) -o $@ $^
 

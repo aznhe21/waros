@@ -30,6 +30,9 @@ pub mod page;
 #[path = "../x86_common/interrupt/mod.rs"]
 pub mod interrupt;
 
+#[path = "../x86_common/task.rs"]
+pub mod task;
+
 #[path = "../x86_common/drivers/mod.rs"]
 pub mod drivers;
 

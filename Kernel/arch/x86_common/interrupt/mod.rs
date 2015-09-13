@@ -10,12 +10,12 @@ use event;
 
 const GDT_ENTRY_BOOT_CS:  usize = 2;
 const GDT_ENTRY_BOOT_DS:  usize = 3;
-const GDT_ENTRY_BOOT_TSS: usize = 4;
-const GDT_BOOT_ENTRIES:   usize = 5;
+//const GDT_ENTRY_BOOT_TSS: usize = 4;
+const GDT_BOOT_ENTRIES:   usize = 4;
 
 const BOOT_CS:  usize = GDT_ENTRY_BOOT_CS  * 8;
 const BOOT_DS:  usize = GDT_ENTRY_BOOT_DS  * 8;
-const BOOT_TSS: usize = GDT_ENTRY_BOOT_TSS * 8;
+//const BOOT_TSS: usize = GDT_ENTRY_BOOT_TSS * 8;
 
 const GDT_ENTRY_KERNEL_CS:          usize = 12;
 const GDT_ENTRY_KERNEL_DS:          usize = 13;

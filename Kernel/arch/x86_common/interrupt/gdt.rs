@@ -2,7 +2,7 @@ use prelude::*;
 use core::u64;
 
 extern "C" {
-    fn flush_gdt();
+    fn flush_gdt(cs: u16, ds: u16);
 }
 
 #[repr(C, packed)]
@@ -24,13 +24,13 @@ pub unsafe fn pre_init() {
     static mut boot_gdt: [u64; super::GDT_BOOT_ENTRIES] = [0; super::GDT_BOOT_ENTRIES];
     boot_gdt[super::GDT_ENTRY_BOOT_CS] = gdt_entry(0, 0xFFFFF, 0xC09B);
     boot_gdt[super::GDT_ENTRY_BOOT_DS] = gdt_entry(0, 0xFFFFF, 0xC093);
-    boot_gdt[super::GDT_ENTRY_BOOT_TSS] = gdt_entry(4096, 103, 0x0089);
+    //boot_gdt[super::GDT_ENTRY_BOOT_TSS] = gdt_entry(4096, 103, 0x0089);
 
     static mut gdtr: Gdtr = Gdtr {
-        len: (u64::BYTES * super::GDT_BOOT_ENTRIES - 1) as u16,
+        len: (super::GDT_BOOT_ENTRIES * u64::BYTES - 1) as u16,
         ptr: 0
     };
-    gdtr.ptr = (boot_gdt.as_mut_ptr() as usize) as u32;
+    gdtr.ptr = boot_gdt.as_mut_ptr() as u32;
 
     asm!("lgdtl ($0)" :: "r"(&gdtr) :: "volatile");
 }
@@ -50,6 +50,6 @@ pub unsafe fn init() {
     gdtr.ptr = init_gdt.as_mut_ptr() as u32;
 
     asm!("lgdtl ($0)" :: "r"(&gdtr) :: "volatile");
-    flush_gdt();
+    flush_gdt(super::KERNEL_CS as u16, super::KERNEL_DS as u16);
 }
 
