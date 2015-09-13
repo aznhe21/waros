@@ -1,56 +1,61 @@
-use core::prelude::*;
 use rt;
 use arch;
-
-pub trait AsPhysAddr<T: ?Sized> {
-    fn as_phys_addr(self) -> PhysAddr where T: Sized;
-}
-
-impl<T: ?Sized> AsPhysAddr<T> for *const T {
-    #[inline(always)]
-    fn as_phys_addr(self) -> PhysAddr where T: Sized {
-        VirtAddr(self as usize).as_phys_addr()
-    }
-}
-
-impl<T: ?Sized> AsPhysAddr<T> for *mut T {
-    #[inline(always)]
-    fn as_phys_addr(self) -> PhysAddr where T: Sized {
-        VirtAddr(self as usize).as_phys_addr()
-    }
-}
+use core::fmt;
+use core::ops::{Add, Sub};
 
 #[derive(Clone, Copy, PartialEq, PartialOrd)]
-pub struct PhysAddr(usize);
+pub struct PhysAddr(u64);
 
 impl PhysAddr {
     #[inline(always)]
-    pub fn from_raw(addr: usize) -> PhysAddr {
+    pub fn from_raw(addr: u64) -> PhysAddr {
         PhysAddr(addr)
     }
 
     #[inline(always)]
-    pub fn from_ptr<T>(ptr: *const T) -> PhysAddr {
-        PhysAddr(ptr as usize)
+    pub fn null() -> PhysAddr {
+        PhysAddr(0)
     }
 
     #[inline(always)]
-    pub fn from_mut_ptr<T>(ptr: *mut T) -> PhysAddr {
-        PhysAddr(ptr as usize)
-    }
-
-    #[inline(always)]
-    pub fn value(&self) -> usize {
+    pub fn value(&self) -> u64 {
         self.0
     }
 
+    #[inline(always)]
+    pub fn is_null(&self) -> bool {
+        self.0 == 0
+    }
+
     pub fn as_virt_addr(&self) -> VirtAddr {
-        if *self <= kernel_space_end().as_phys_addr() {
-            VirtAddr(self.0 + arch::KERNEL_BASE)
+        if *self <= kernel_memory().as_phys_addr() {
+            VirtAddr::from_raw(self.value() as usize + arch::KERNEL_BASE)
         } else {
-            panic!("as_virt_addr: {:X} > {:X}", self.0, kernel_space_end().as_phys_addr().0);
+            panic!("as_virt_addr: {:?} > {:?}", self, kernel_memory().as_phys_addr());
             // phys_addr_to_frame
         }
+    }
+}
+
+impl Add<u64> for PhysAddr {
+    type Output = PhysAddr;
+
+    fn add(self, rhs: u64) -> PhysAddr {
+        PhysAddr(self.0 + rhs)
+    }
+}
+
+impl Sub<u64> for PhysAddr {
+    type Output = PhysAddr;
+
+    fn sub(self, rhs: u64) -> PhysAddr {
+        PhysAddr(self.0 - rhs)
+    }
+}
+
+impl fmt::Debug for PhysAddr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Pointer::fmt(&(self.value() as *const usize), f)
     }
 }
 
@@ -74,55 +79,116 @@ impl VirtAddr {
     }
 
     #[inline(always)]
+    pub fn null() -> VirtAddr {
+        VirtAddr(0)
+    }
+
+    #[inline(always)]
     pub fn value(&self) -> usize {
         self.0
     }
 
     #[inline(always)]
+    pub fn is_null(&self) -> bool {
+        self.0 == 0
+    }
+
+    #[inline(always)]
     pub fn as_phys_addr(&self) -> PhysAddr {
-        assert!(*self <= kernel_space_end(), "Out of kernel space: {:X} > {:X}", self.0, arch::KERNEL_BASE);
-        PhysAddr(self.0 - arch::KERNEL_BASE)
+        assert!(*self <= kernel_memory(), "Out of kernel space: {:?} > {:?}", self, kernel_memory());
+        PhysAddr((self.value() - arch::KERNEL_BASE) as u64)
     }
 
     #[inline(always)]
     pub fn as_ptr<T>(&self) -> *const T {
-        self.0 as *const T
+        self.value() as *const T
     }
 
     #[inline(always)]
     pub fn as_mut_ptr<T>(&self) -> *mut T {
-        self.0 as *mut T
+        self.value() as *mut T
     }
 }
 
-static mut address: usize = 0;
+impl Add<usize> for VirtAddr {
+    type Output = VirtAddr;
+
+    fn add(self, rhs: usize) -> VirtAddr {
+        VirtAddr(self.0 + rhs)
+    }
+}
+
+impl Sub<usize> for VirtAddr {
+    type Output = VirtAddr;
+
+    fn sub(self, rhs: usize) -> VirtAddr {
+        VirtAddr(self.0 - rhs)
+    }
+}
+
+impl fmt::Debug for VirtAddr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Pointer::fmt(&(self.value() as *const usize), f)
+    }
+}
+
+enum KernelMemory {
+    Uninit,
+    Available(VirtAddr),
+    End(VirtAddr)
+}
+
+impl KernelMemory {
+    #[inline(always)]
+    pub fn addr(&self) -> VirtAddr {
+        match *self {
+            KernelMemory::Uninit => VirtAddr::null(),
+            KernelMemory::Available(address) => address,
+            KernelMemory::End(address) => address
+        }
+    }
+}
+
+static mut memory: KernelMemory = KernelMemory::Uninit;
 
 #[inline]
 pub fn init() {
     unsafe {
-        address = arch::kernel_end().value();
+        memory = KernelMemory::Available(arch::kernel_end());
     }
 }
 
 #[inline(always)]
-pub fn kernel_space_end() -> VirtAddr {
-    VirtAddr::from_raw(unsafe { address })
+pub fn kernel_memory() -> VirtAddr {
+    unsafe { memory.addr() }
 }
 
-#[inline]
-pub fn allocate<T>(size: usize) -> *mut T {
+#[inline(always)]
+pub fn memory_end() -> VirtAddr {
     unsafe {
-        let addr = address;
-        address += size;
-        addr as *mut T
+        match memory {
+            KernelMemory::Uninit => panic!("Uninitialized"),
+            KernelMemory::Available(address) => {
+                let addr = VirtAddr::from_raw(rt::align_up(address.value(), arch::FRAME_SIZE));
+                memory = KernelMemory::End(addr);
+                addr
+            },
+            KernelMemory::End(_) => panic!("Already ended")
+        }
     }
 }
 
 #[inline]
-pub fn allocate_aligned<T>(size: usize, align: usize) -> *mut T {
+pub fn allocate(size: usize, align: usize) -> *mut u8 {
     unsafe {
-        address = rt::align_up(address, align);
+        if let KernelMemory::Available(VirtAddr(old_addr)) = memory {
+            let addr = rt::align_up(old_addr, align);
+
+            memory = KernelMemory::Available(VirtAddr::from_raw(addr + size));
+            addr as *mut u8
+        } else {
+            panic!("Unable to allocate after kernel space");
+        }
     }
-    allocate(size)
 }
 

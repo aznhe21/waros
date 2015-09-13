@@ -12,5 +12,4 @@ pub use core::prelude::*;
 
 pub use rt::ptr::{UOffset, UOffsetMut};
 pub use rt::option::UnsafeOption;
-pub use memory::kernel::AsPhysAddr;
 

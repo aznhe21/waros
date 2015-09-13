@@ -15,7 +15,7 @@
 #![feature(alloc)]	//< liballoc (see below) is not yet stablized
 #![feature(associated_consts, const_fn)]
 #![feature(core_intrinsics, core_prelude, core_slice_ext, core_str_ext)]
-#![feature(zero_one, num_bits_bytes, step_by, ptr_as_ref)]
+#![feature(zero_one, num_bits_bytes, step_by, ptr_as_ref, iter_arith)]
 
 #![no_std]	//< Kernels can't use std
 #![no_builtins]
@@ -78,11 +78,12 @@ pub fn kmain() -> ! {
     log!("WARos: Switched to protected mode");
 
     multiboot::init();
-    memory::init(multiboot::info().mmap().expect("Memory map not provided"));
-    //memory::allocate(32, 4);
-    arch::page::init();
+    memory::init_by_multiboot(multiboot::info().mmap().expect("Memory map not provided"));
     timer::init();
     arch::interrupt::init();
+
+    log!("Total: {} MB Free: {} MB", memory::buddy::manager().total_size() / 1024 / 1024,
+        memory::buddy::manager().free_size() / 1024 / 1024);
 
     let display = display::vbe::Vbe::new();
     display.log();

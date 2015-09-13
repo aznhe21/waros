@@ -36,9 +36,7 @@ impl Vbe {
         let res = vbe.minfo.h_res as usize * vbe.minfo.v_res as usize;
         let vram = vbe.minfo.phys_base_ptr as usize;
         let vram_end = vram + res * vbe.minfo.bpp as usize;
-        unsafe {
-            page::kernel_pt.map_direct(3, 3, PhysAddr::from_raw(vram) .. PhysAddr::from_raw(vram_end));
-        }
+        page::table().map_direct(3, 3, PhysAddr::from_raw(vram as u64) .. PhysAddr::from_raw(vram_end as u64));
 
         vbe
     }
