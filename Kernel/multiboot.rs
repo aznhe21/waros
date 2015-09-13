@@ -45,7 +45,7 @@ pub fn info() -> &'static MultibootInfo {
 #[inline]
 pub fn init() {
     let info = unsafe {
-        mboot_ptr = mboot_ptr.uoffset8(arch::KERNEL_BASE);
+        mboot_ptr = (mboot_ptr as *mut u8).uoffset(arch::KERNEL_BASE) as *mut MultibootInfo;
         &mut *mboot_ptr
     };
     info.cmdline += arch::KERNEL_BASE as u32;

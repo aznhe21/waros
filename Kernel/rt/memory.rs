@@ -51,8 +51,3 @@ pub unsafe fn strlen(ptr: *const u8) -> usize {
     p8 as usize - ptr as usize
 }
 
-#[inline(always)]
-pub fn align_up(n: usize, align: usize) -> usize {
-    n + (align - 1) & !(align - 1)
-}
-
