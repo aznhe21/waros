@@ -64,6 +64,8 @@ pub mod memory;
 
 mod event;
 
+mod timer;
+
 // Kernel entrypoint
 #[lang="start"]
 #[no_mangle]
@@ -80,6 +82,7 @@ pub fn kmain() -> ! {
     }
 
     multiboot::init();
+    timer::init();
 
     if !multiboot::info().vbe_controller_info().expect("VBE not supported").valid() {
         panic!("VBE signature is invalid");
@@ -121,7 +124,7 @@ pub fn kmain() -> ! {
                         display.clear(color);
                     },
                     0x39 => {// Space
-                        log!("Counter: {}", arch::interrupt::pit::counter());
+                        log!("Counter: {}", timer::manager().counter());
                     },
                     _ => {}
                 }
@@ -167,6 +170,9 @@ pub fn kmain() -> ! {
                 if color > 15 {
                     color = 1;
                 }
+            },
+            Event::Timer(timer_id) => {
+                log!("Timer {}", timer_id);
             },
             _ => {
                 arch::interrupt::sti_hlt();

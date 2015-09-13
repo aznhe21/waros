@@ -1,8 +1,10 @@
 use arch::interrupt::device;
 use collections::FixedQueue;
+use timer;
 
 #[derive(Clone, Copy)]
 pub enum Event {
+    Timer(timer::TimerId),
     Device(device::Device),
     None
 }

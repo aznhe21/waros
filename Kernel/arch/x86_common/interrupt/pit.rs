@@ -1,6 +1,6 @@
 use arch::x86_io::outb;
+use timer;
 use super::pic::IRQ;
-use core::intrinsics;
 
 const PIT_REG_COUNTER0: u16 = 0x0040;
 const PIT_REG_COUNTER1: u16 = 0x0041;
@@ -57,17 +57,8 @@ pub unsafe fn init() {
     IRQ::PIT.enable();
 }
 
-static mut count: usize = 0;
-
 fn pit_handler(_irq: IRQ) {
     IRQ::PIT.eoi();
-    unsafe {
-        count = intrinsics::overflowing_add(count, 1000 / FREQ as usize);
-    }
-}
-
-#[inline(always)]
-pub fn counter() -> usize {
-    unsafe { count }
+    timer::manager().tick(1000 / FREQ as usize);
 }
 
