@@ -12,6 +12,7 @@
 
 /* The kernel is linked to run at 3GB */
 LINKED_BASE = 0xC0000000
+INIT_PAGING_MB = 16
 
 /* === Multiboot Header === */
 MULTIBOOT_PAGE_ALIGN  =  (1<<0)
@@ -114,18 +115,17 @@ init_pd:
 	.rept 768-1
 		.long 0
 	.endr
-	.long init_pt - LINKED_BASE + 3
-	.long init_pt2 - LINKED_BASE + 3
-	.rept 255-1
+	.set mb, 0
+	.rept INIT_PAGING_MB
+		.long init_pt + 1024 * 4 * mb - LINKED_BASE + 3
+		.set mb, mb + 1
+	.endr
+	.rept 256-INIT_PAGING_MB
 		.long 0
 	.endr
 init_pt:
 	/* The contents of this table is filled by the x86_prep_page_table function */
-	.rept 1024
-		.long 0
-	.endr
-init_pt2:
-	.rept 1024
+	.rept 1024*INIT_PAGING_MB
 		.long 0
 	.endr
 .globl mboot_sig

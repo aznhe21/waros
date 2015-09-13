@@ -60,8 +60,8 @@ pub fn kernel_size() -> usize {
 }
 
 #[no_mangle]
-pub fn x86_prep_page_table(buf: &mut [u32; 2048]) {
-    for i in 0u32 .. 2048 {
+pub fn x86_prep_page_table(buf: &mut [u32; 1024 * 16]) {
+    for i in 0u32 .. 1024 * 16 {
         buf[i as usize] = (i << 12) | 3;
         //buf[i as usize] = i * 0x1000 + 3;
     }
