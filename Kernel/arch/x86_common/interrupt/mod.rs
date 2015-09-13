@@ -1,12 +1,12 @@
-// #![feature(asm)]
-
 pub mod gdt;
 pub mod idt;
 pub mod pic;
 pub mod pit;
 
 mod a20;
-pub mod input;
+pub mod device;
+
+use event;
 
 const GDT_ENTRY_BOOT_CS:  usize = 2;
 const GDT_ENTRY_BOOT_DS:  usize = 3;
@@ -76,7 +76,9 @@ pub fn init() {
         idt::init();
         pic::init();
         pit::init();
-        input::init();
+        device::init(event::queue());
+
+        sti();
     }
 }
 

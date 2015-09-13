@@ -1,5 +1,5 @@
 use arch::x86_io::inb;
-pub use self::keyboard::Key;
+use event::EventQueue;
 use super::pic::IRQ;
 pub use self::mouse::Mouse;
 
@@ -27,19 +27,16 @@ unsafe fn wait_for_write() -> bool {
 mod keyboard {
     use prelude::*;
     use arch::x86_io::inb;
-    use collections::FixedQueue;
+    use event::{Event, EventQueue};
     use super::super::idt;
     use super::super::pic::IRQ;
+    use super::Device::{KeyDown, KeyUp};
 
-    pub enum Key {
-        Down(u8),
-        Up(u8)
-    }
+    static mut queue: Option<&'static mut EventQueue> = None;
 
-    static mut queue: FixedQueue<'static, u8> = FixedQueue::new(&mut [0; 64]);
-
-    pub fn init() {
+    pub fn init(q: &'static mut EventQueue) {
         unsafe {
+            queue = Some(q);
             idt::set_handler(IRQ::Keyboard, keyboard_handler);
         }
     }
@@ -47,25 +44,13 @@ mod keyboard {
     fn keyboard_handler(_irq: IRQ) {
         IRQ::Keyboard.eoi();
         unsafe {
-            let data = inb(0x60);
-            if data != 0xFA {
-                queue.push(data);
-            }
-        }
-    }
-
-    pub fn event() -> Option<Key> {
-        unsafe {
-            /*if queue.peek(0).unwrap_or(0) == 0xE0 {
-             * special key
-            }*/
-            queue.pop().map(|code| {
-                if code & 0x80 == 0 {
-                    Key::Down(code)
-                } else {
-                    Key::Up(code & 0x7F)
-                }
-            })
+            let key = match inb(0x60) {
+                0xFA => return,
+                // 0xE0 => special key
+                code if code & 0x80 == 0 => KeyDown(code),
+                code                     => KeyUp(code & 0x7F),
+            };
+            queue.as_mut().be_some().push(Event::Device(key));
         }
     }
 }
@@ -73,10 +58,11 @@ mod keyboard {
 mod mouse {
     use prelude::*;
     use arch::x86_io::{outb, inb};
-    use collections::FixedQueue;
+    use event::{Event, EventQueue};
     use super::super::idt;
     use super::super::pic::IRQ;
 
+    #[derive(Clone, Copy)]
     pub struct Mouse {
         pub x: i32,
         pub y: i32,
@@ -117,14 +103,22 @@ mod mouse {
         true
     }
 
-    static mut queue: FixedQueue<'static, u8> = FixedQueue::new(&mut [0; 64]);
+    enum Stage {
+        First,
+        Second(u8),
+        Third(u8, i8),
+    }
 
-    pub fn init() {
+    static mut queue: Option<&'static mut EventQueue> = None;
+    static mut stage: Stage = Stage::First;
+
+    pub fn init(q: &'static mut EventQueue) {
         unsafe {
             if !init_mouse() {
                 panic!("Failed to initialize the mouse");
             }
 
+            queue = Some(q);
             idt::set_handler(IRQ::Mouse, mouse_handler);
         }
     }
@@ -132,56 +126,44 @@ mod mouse {
     fn mouse_handler(_irq: IRQ) {
         IRQ::Mouse.eoi();
         unsafe {
-            queue.push(inb(0x60));
-        }
-    }
+            let data = inb(0x60);
 
-    pub fn event() -> Option<Mouse> {
-        unsafe {
-            while queue.peek(0).map_or(false, |data| data & 0x08 == 0) {
-                queue.pop();
-            }
-
-            if queue.len() >= 3 {
-                let flags = queue.pop().unwrap();
-                let x = queue.pop().unwrap() as i8 as i32;
-                let y = queue.pop().unwrap() as i8 as i32;
-                Some(Mouse {
-                    x: x,
-                    y: -y,
-                    left: flags & 0x01 != 0,
-                    middle: false,
-                    right: flags & 0x02 != 0
-                })
-            } else {
-                None
-            }
+            stage = match stage {
+                Stage::First if data & 0x08 == 0 => Stage::First,
+                Stage::First                     => Stage::Second(data),
+                Stage::Second(flags)             => Stage::Third(flags, data as i8),
+                Stage::Third(flags, x)           => {
+                    let y = data as i8;
+                    queue.as_mut().be_some().push(Event::Device(super::Device::Mouse(Mouse {
+                        x: x as i32,
+                        y: -y as i32,
+                        left: flags & 0x01 != 0,
+                        middle: false,// TODO
+                        right: flags & 0x02 != 0,
+                    })));
+                    Stage::First
+                }
+            };
         }
     }
 }
 
-pub enum Event {
-    Keyboard(Key),
-    Mouse(Mouse),
-    None
+#[derive(Clone, Copy)]
+pub enum Device {
+    KeyDown(u8),
+    KeyUp(u8),
+    Mouse(Mouse)
 }
 
 #[inline]
-pub fn init() {
+pub fn init(queue: &'static mut EventQueue) {
     IRQ::Mouse.disable();
     IRQ::Keyboard.disable();
 
-    keyboard::init();
-    mouse::init();
+    keyboard::init(queue);
+    mouse::init(queue);
 
     IRQ::Keyboard.enable();
     IRQ::Mouse.enable();
-}
-
-pub fn get() -> Event {
-    keyboard::event().map_or_else(
-        || mouse::event().map_or(Event::None, Event::Mouse),
-        Event::Keyboard
-    )
 }
 

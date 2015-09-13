@@ -62,15 +62,16 @@ mod multiboot;
 // Memory management
 pub mod memory;
 
+mod event;
+
 // Kernel entrypoint
 #[lang="start"]
 #[no_mangle]
 pub fn kmain() -> ! {
     use core::cmp;
-    use arch::interrupt::input::{Event, Key};
-
-    use arch::drivers::display;
-    use arch::drivers::display::{Color, Display, DisplaySize};
+    use event::Event;
+    use arch::interrupt::device::Device;
+    use arch::drivers::display::{self, Color, Display, DisplaySize};
 
     log!("WARos: Switched to protected mode");
 
@@ -89,7 +90,6 @@ pub fn kmain() -> ! {
     arch::page::init();
 
     arch::interrupt::init();
-    arch::interrupt::sti_hlt();
 
     arch::drivers::init();
 
@@ -104,11 +104,11 @@ pub fn kmain() -> ! {
     loop {
         arch::interrupt::cli();
 
-        match arch::interrupt::input::get() {
-            Event::Keyboard(Key::Down(code)) => {
+        match event::Event::get() {
+            Event::Device(Device::KeyDown(code)) => {
                 log!("Key down: {:02X}", code);
             },
-            Event::Keyboard(Key::Up(code)) => {
+            Event::Device(Device::KeyUp(code)) => {
                 // keyup
                 log!("Key up: {:02X}", code);
 
@@ -126,7 +126,7 @@ pub fn kmain() -> ! {
                     _ => {}
                 }
             },
-            Event::Mouse(mouse) => {
+            Event::Device(Device::Mouse(mouse)) => {
                 if clicking {
                     clicking = mouse.left;
                 } else if mouse.left {
@@ -155,7 +155,6 @@ pub fn kmain() -> ! {
                 if clicking {
                     let l = cmp::max(0, mouse_pos.0 - 4);        // 左端を切り上げ
                     let r = cmp::min(mouse_pos.0 + 4, res.0 - 1);// 右端を切り捨て
-                    //let r = mouse_pos.0 + 4;
                     let t = cmp::max(0, mouse_pos.1 - 4);        // 上端を切り上げ
                     let b = cmp::min(mouse_pos.1 + 4, res.1 - 1);// 下端を切り捨て
                     display.fill(pcolor, (l, t, r - l, b - t));
@@ -169,7 +168,7 @@ pub fn kmain() -> ! {
                     color = 1;
                 }
             },
-            Event::None => {
+            _ => {
                 arch::interrupt::sti_hlt();
             }
         }
