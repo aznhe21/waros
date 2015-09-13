@@ -72,7 +72,6 @@ pub fn x86_pre_init() {
     log!("WARos: pre boot");
 
     interrupt::pre_init();
-    drivers::pre_init();
 
     /*while !serial::is_transmit_empty() {
         // Do nothing

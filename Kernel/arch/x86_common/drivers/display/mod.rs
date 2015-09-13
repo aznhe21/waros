@@ -15,14 +15,6 @@ pub mod bochs;
     vga::Vga::new()
 }*/
 
-#[inline(always)]
-pub fn pre_init() {
-}
-
-#[inline(always)]
-pub fn init() {
-}
-
 fn set_rgb_palette() {
     unsafe {
         set_palette(0, &RGB_TABLE);

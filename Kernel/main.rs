@@ -14,8 +14,8 @@
 #![feature(core)]	//< libcore (see below) is not yet stablized
 #![feature(alloc)]	//< liballoc (see below) is not yet stablized
 #![feature(associated_consts, const_fn)]
-#![feature(core_intrinsics, core_prelude, core_slice_ext, core_str_ext, ptr_as_ref)]
-#![feature(zero_one, num_bits_bytes, step_by)]
+#![feature(core_intrinsics, core_prelude, core_slice_ext, core_str_ext)]
+#![feature(zero_one, num_bits_bytes, step_by, ptr_as_ref)]
 
 #![no_std]	//< Kernels can't use std
 #![no_builtins]
@@ -35,20 +35,20 @@ mod macros;
 // Runtime functions
 pub mod rt;
 
+// Prelude
+mod prelude;
+
+// Collections library
+#[macro_use]
+mod collections;
+
 // Achitecture-specific modules
 #[cfg(target_arch="x86_64")] #[path="arch/amd64/mod.rs"]
 pub mod arch;
 #[cfg(target_arch="x86")] #[path="arch/x86/mod.rs"]
 pub mod arch;
 
-// Prelude
-mod prelude;
-
 mod num_traits;
-
-// Collections library
-#[macro_use]
-mod collections;
 
 // Exception handling (panic)
 pub mod unwind;
@@ -77,24 +77,12 @@ pub fn kmain() -> ! {
 
     log!("WARos: Switched to protected mode");
 
-    if !multiboot::magic_valid() {
-        panic!("Multiboot magic is invalid");
-    }
-
     multiboot::init();
-    timer::init();
-
-    if !multiboot::info().vbe_controller_info().expect("VBE not supported").valid() {
-        panic!("VBE signature is invalid");
-    }
-
     memory::init(multiboot::info().mmap().expect("Memory map not provided"));
     //memory::allocate(32, 4);
     arch::page::init();
-
+    timer::init();
     arch::interrupt::init();
-
-    arch::drivers::init();
 
     let display = display::vbe::Vbe::new();
     display.log();

@@ -18,11 +18,12 @@ use core::fmt;
 #[no_mangle]
 pub extern "C" fn rust_begin_unwind(args: fmt::Arguments, file: &'static str, line: usize) -> !
 {
+    arch::interrupt::cli();
     unsafe {
         Writer::force_unlock();
     }
     // 'args' will print to the formatted string passed to panic!
-    log!("{}:{}: Panicked \"{}\"", file, line, args);
+    log!("{}:{}: Panicked at '{}'", file, line, args);
     arch::print_backtrace();
     loop {}
 }

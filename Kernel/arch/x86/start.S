@@ -12,7 +12,6 @@
 
 /* The kernel is linked to run at 3GB */
 LINKED_BASE = 0xC0000000
-PDT_INDEX = LINKED_BASE >> 22
 
 /* === Multiboot Header === */
 MULTIBOOT_PAGE_ALIGN  =  (1<<0)
@@ -110,19 +109,6 @@ start_high:
 
 /* === Read-write data === */
 .section .data
-/*init_pd:
-	.long 0x00000083
-	.rept PDT_INDEX - 1
-		.long 0
-	.endr
-	.long 0x00000083            // 仮想[0x0C0000000] から物理[0x00000000]
-	.long 0x00400083            // 仮想[0x0C0400000] から物理[0x00400000]
-	.long 0x00800083            // 仮想[0x0C0800000] から物理[0x00800000]
-	.long 0x00C00083            // 仮想[0x0C0C00000] から物理[0x00C00000]
-	.long 0x01000083            // 仮想[0x0C1000000] から物理[0x01000000]
-	.rept 0x3FF - (PDT_INDEX - 4)
-		.long 0
-	.endr*/
 init_pd:
 	.long init_pt - LINKED_BASE + 3
 	.rept 768-1

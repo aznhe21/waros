@@ -50,10 +50,6 @@ pub fn available() -> bool {
     unsafe { read_reg(VBE_DISPI_INDEX_ID) & 0xFFF0 == VBE_DISPI_ID0 }
 }
 
-#[inline(always)]
-pub fn pre_init() {
-}
-
 /*#[inline(always)]
 fn configure(width: u16, height: u16, depth: u16, use_lfb: bool, clear_memory: bool) -> *mut u8 {
     unsafe {

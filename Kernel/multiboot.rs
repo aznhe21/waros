@@ -44,6 +44,8 @@ pub fn info() -> &'static MultibootInfo {
 
 #[inline]
 pub fn init() {
+    assert!(magic_valid(), "Invalid multiboot magic");
+
     let info = unsafe {
         mboot_ptr = (mboot_ptr as *mut u8).uoffset(arch::KERNEL_BASE) as *mut MultibootInfo;
         &mut *mboot_ptr
