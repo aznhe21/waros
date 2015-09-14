@@ -24,19 +24,18 @@ unsafe fn wait_for_write() -> bool {
     false
 }
 
+static mut queue: Option<&'static mut EventQueue> = None;
+
 mod keyboard {
     use prelude::*;
     use arch::x86_io::inb;
-    use event::{Event, EventQueue};
+    use event::Event;
     use super::super::idt;
     use super::super::pic::IRQ;
     use super::Device::{KeyDown, KeyUp};
 
-    static mut queue: Option<&'static mut EventQueue> = None;
-
-    pub fn init(q: &'static mut EventQueue) {
+    pub fn init() {
         unsafe {
-            queue = Some(q);
             idt::set_handler(IRQ::Keyboard, keyboard_handler);
         }
     }
@@ -50,7 +49,7 @@ mod keyboard {
                 code if code & 0x80 == 0 => KeyDown(code),
                 code                     => KeyUp(code & 0x7F),
             };
-            queue.as_mut().be_some().push(Event::Device(key));
+            super::queue.as_mut().be_some().push(Event::Device(key));
         }
     }
 }
@@ -58,7 +57,7 @@ mod keyboard {
 mod mouse {
     use prelude::*;
     use arch::x86_io::{outb, inb};
-    use event::{Event, EventQueue};
+    use event::Event;
     use super::super::idt;
     use super::super::pic::IRQ;
 
@@ -109,16 +108,14 @@ mod mouse {
         Third(u8, i8),
     }
 
-    static mut queue: Option<&'static mut EventQueue> = None;
     static mut stage: Stage = Stage::First;
 
-    pub fn init(q: &'static mut EventQueue) {
+    pub fn init() {
         unsafe {
             if !init_mouse() {
                 panic!("Failed to initialize the mouse");
             }
 
-            queue = Some(q);
             idt::set_handler(IRQ::Mouse, mouse_handler);
         }
     }
@@ -134,7 +131,7 @@ mod mouse {
                 Stage::Second(flags)             => Stage::Third(flags, data as i8),
                 Stage::Third(flags, x)           => {
                     let y = data as i8;
-                    queue.as_mut().be_some().push(Event::Device(super::Device::Mouse(Mouse {
+                    super::queue.as_mut().be_some().push(Event::Device(super::Device::Mouse(Mouse {
                         x: x as i32,
                         y: -y as i32,
                         left: flags & 0x01 != 0,
@@ -156,12 +153,15 @@ pub enum Device {
 }
 
 #[inline]
-pub fn init(queue: &'static mut EventQueue) {
+pub fn init(q: &'static mut EventQueue) {
     IRQ::Mouse.disable();
     IRQ::Keyboard.disable();
 
-    keyboard::init(queue);
-    mouse::init(queue);
+    unsafe {
+        queue = Some(q);
+    }
+    keyboard::init();
+    mouse::init();
 
     IRQ::Keyboard.enable();
     IRQ::Mouse.enable();

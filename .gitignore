@@ -6,6 +6,7 @@
 /*.dsm
 /*.bin
 /*.bin.elf64
+/*.tar.gz
 /*.iso
 /grub/*.img
 

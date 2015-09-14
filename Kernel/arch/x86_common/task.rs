@@ -13,13 +13,13 @@ const TASK_SWITCH_INTERVAL: usize = 20;
 const TASK_STACK_SIZE: usize = 64 * 1024;
 
 extern "C" {
-    fn task_switch(csp: *mut *mut (), cip: *mut *mut (), nsp: *mut (), nip: *mut ());
+    fn task_switch(csp: *mut *mut u8, cip: *mut *mut u8, nsp: *mut u8, nip: *mut u8);
 }
 
 pub struct Task {
     stack: &'static mut [usize],
-    sp: *mut (),
-    ip: *mut (),
+    sp: *mut u8,
+    ip: *mut u8,
     prev: *mut Task,
     next: *mut Task
 }
@@ -63,8 +63,8 @@ impl TaskManager {
             let sp = &mut task.stack[stack_len - 3 ..];
             sp[0] = task_terminated as usize;
             sp[1] = unsafe { *(&arg as *const T as *const usize) };
-            task.sp = sp.as_mut_ptr() as *mut ();
-            task.ip = f as *mut ();
+            task.sp = sp.as_mut_ptr() as *mut u8;
+            task.ip = f as *mut u8;
         }
 
         self.tasks.push_back(task);

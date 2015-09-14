@@ -5,21 +5,22 @@ ARCH ?= x86
 
 DEBUG ?= yes
 
-# Toolchain commands (can be overridden)
-RUSTC ?= rustc
-MKRESCUE ?= grub-mkrescue
 ifeq ($(ARCH),amd64)
-    LD := x86_64-elf-ld
-    AS := x86_64-elf-as
-    OBJDUMP := x86_64-elf-objdump
-    OBJCOPY := x86_64-elf-objcopy
+    TRIPLE ?= x86_64-elf-
 else ifeq ($(ARCH),x86)
-    LD := i686-elf-ld
-    AS := i686-elf-as
-    OBJDUMP := i686-elf-objdump
+    TRIPLE ?= i686-elf-
 else
     $(error Unknown architecture $(ARCH))
 endif
+
+
+# Toolchain commands (can be overridden)
+RUSTC ?= rustc
+MKRESCUE ?= grub-mkrescue
+LD := $(TRIPLE)ld
+AS := $(TRIPLE)as
+OBJDUMP := $(TRIPLE)objdump
+OBJCOPY := $(TRIPLE)objcopy
 
 # Object directory
 OBJDIR := .obj/$(ARCH)/
@@ -32,7 +33,7 @@ LINKFLAGS += -Map $(OBJDIR)map.txt
 LINKFLAGS += --gc-sections
 LINKFLAGS += -z max-page-size=0x1000
 
-RUSTFLAGS := --color always --cfg arch__$(ARCH) --target=$(TARGETSPEC)
+RUSTFLAGS := --color always --cfg arch__$(ARCH) --target=$(TARGETSPEC) --cfg disable_float
 ifeq ($(DEBUG),yes)
     RUSTFLAGS += -g
 else
@@ -40,7 +41,7 @@ else
 endif
 # - amd64 needs to be set to use soft floating point
 ifeq ($(ARCH),amd64)
-RUSTFLAGS += -C soft-float
+    RUSTFLAGS += -C soft-float
 endif
 
 # Objects
@@ -54,12 +55,15 @@ GRUB_CFG := $(GRUB_DIR)boot/grub/grub.cfg
 GRUB_IMG := $(GRUB_DIR)kernel.img
 GRUB_ISO := ../grub.$(ARCH).iso
 
-.PHONY: all clean
+.PHONY: all clean UPDATE
 
 all: $(BIN) $(GRUB_ISO)
 
 clean:
 	$(RM) -rf $(BIN) $(BIN).dsm $(OBJDIR) $(GRUB_ISO) $(GRUB_IMG)
+
+UPDATE:
+	curl https://static.rust-lang.org/dist/rustc-nightly-src.tar.gz -o ../rustc-nightly-src.tar.gz
 
 # Final link command
 $(BIN): $(OBJS) arch/$(ARCH)/link.ld
@@ -74,6 +78,13 @@ $(GRUB_ISO): $(BIN) $(GRUB_CFG)
 	cp $(BIN) $(GRUB_IMG)
 	$(MKRESCUE) -o $@ $(GRUB_DIR)
 
+../libcore/lib.rs: ../rustc-nightly-src.tar.gz ../libcore_nofp.patch
+	tar -xmf ../rustc-nightly-src.tar.gz -C ../ rustc-nightly/src/libcore --transform 's~^rustc-nightly/src/~~'
+	cd .. && patch -p0 < libcore_nofp.patch
+
+#../liballoc/lib.rs: ../rustc-nightly-src.tar.gz
+#	tar -xmf ../rustc-nightly-src.tar.gz -C ../ rustc-nightly/src/liballoc --transform 's~^rustc-nightly/src/~~'
+
 # Compile libcore from ../libcore/
 $(OBJDIR)libcore.rlib: ../libcore/lib.rs $(TARGETSPEC)
 	@mkdir -p $(dir $@)
@@ -82,7 +93,7 @@ $(OBJDIR)libcore.rlib: ../libcore/lib.rs $(TARGETSPEC)
 # Compile liballoc from ../liballoc/
 $(OBJDIR)liballoc.rlib: ../liballoc/lib.rs $(LIBCORE) $(TARGETSPEC)
 	@mkdir -p $(dir $@)
-	$(RUSTC) $(RUSTFLAGS) --cfg 'feature="external_funcs"' -o $@ --crate-type=lib --emit=link,dep-info $< --extern core=$(LIBCORE)
+	$(RUSTC) $(RUSTFLAGS) -o $@ --crate-type=lib --emit=link,dep-info $< --extern core=$(LIBCORE)
 
 # Compile rust kernel object
 $(OBJDIR)kernel.o: main.rs $(LIBCORE) $(LIBALLOC) $(TARGETSPEC)

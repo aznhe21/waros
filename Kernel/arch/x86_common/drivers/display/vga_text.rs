@@ -1,6 +1,5 @@
 #![allow(dead_code)]
 
-use prelude::*;
 use core::mem;
 use core::cmp::max;
 use arch::x86_io::outb;

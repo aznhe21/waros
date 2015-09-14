@@ -1,6 +1,6 @@
 /*
  * Rust BareBones OS
- * - By John Hodge (Mutabah/thePowersGang) 
+ * - By John Hodge (Mutabah/thePowersGang)
  *
  * main.rs
  * - Top-level file for kernel
@@ -11,22 +11,12 @@
 #![feature(no_std)]	//< unwind needs to define lang items
 #![feature(lang_items)]	//< unwind needs to define lang items
 #![feature(asm)]	//< As a kernel, we need inline assembly
-#![feature(core)]	//< libcore (see below) is not yet stablized
-#![feature(alloc)]	//< liballoc (see below) is not yet stablized
 #![feature(associated_consts, const_fn)]
-#![feature(core_intrinsics, core_prelude, core_slice_ext, core_str_ext)]
+#![feature(core_intrinsics, core_slice_ext, core_str_ext)]
 #![feature(zero_one, num_bits_bytes, step_by, ptr_as_ref, iter_arith)]
 
 #![no_std]	//< Kernels can't use std
 #![no_builtins]
-
-use prelude::*;
-
-// Load libcore (it's nice and freestanding)
-// - We want the macros from libcore
-#[macro_use]
-extern crate core;
-extern crate alloc;
 
 // Macros, need to be loaded before everything else due to how rust parses
 #[macro_use]

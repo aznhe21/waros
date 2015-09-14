@@ -11,7 +11,6 @@
  */
 #![allow(dead_code)]
 
-use prelude::*;
 use memory::kernel::VirtAddr;
 use core::fmt::Write;
 use logging::Writer;
@@ -41,19 +40,19 @@ pub const FRAME_SIZE: usize = 0x1000;
 pub const KERNEL_BASE: usize = 0xC0000000;
 
 extern {
-    static __kernel_start: ();
-    static __kernel_end: ();
+    static __kernel_start: u8;
+    static __kernel_end: u8;
 }
 
 #[inline(always)]
 pub fn kernel_start() -> VirtAddr {
-    let addr = &__kernel_start as *const () as usize;
+    let addr = &__kernel_start as *const u8 as usize;
     VirtAddr::from_raw(addr - 0x00100000)
 }
 
 #[inline(always)]
 pub fn kernel_end() -> VirtAddr {
-    let addr = &__kernel_end as *const () as usize;
+    let addr = &__kernel_end as *const u8 as usize;
     VirtAddr::from_raw(addr)
 }
 

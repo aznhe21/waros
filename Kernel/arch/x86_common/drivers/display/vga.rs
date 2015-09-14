@@ -1,4 +1,3 @@
-use prelude::*;
 use rt;
 use arch::x86_io::{inb, outb, outw};
 use super::{Color, DisplaySize, Display};

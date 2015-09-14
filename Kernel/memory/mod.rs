@@ -1,4 +1,3 @@
-use prelude::*;
 use multiboot;
 use arch::page;
 

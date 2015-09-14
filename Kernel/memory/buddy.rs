@@ -26,14 +26,14 @@ impl BuddyManager {
             *order = LinkedList::new();
         }
 
-        let order = cmp::min(MAX_ORDER - 1, usize::BITS - frames.len().leading_zeros() as usize);
+        let order = cmp::min(MAX_ORDER - 1, usize::BITS - self.frames.len().leading_zeros() as usize);
 
         let mut idx = 0;
-        let mut cur_len = frames.len();
+        let mut cur_len = self.frames.len();
         let mut frame_len = 1 << order;
         for cur_order in (0 .. order + 1).rev() {
             while cur_len >= frame_len {
-                let frame = &mut frames[idx];
+                let frame = &mut self.frames[idx];
                 frame.order = cur_order;
                 self.orders[cur_order].push_front(frame);
 
@@ -68,9 +68,10 @@ impl BuddyManager {
     pub fn free(&mut self, frame: &'static mut PageFrame) {
         assert!(frame.using);
 
+        let frame_ptr = frame as *const PageFrame;
         let mut top_index = self.frames
             .iter()
-            .position(|f| f as *const _ == frame as *const _)
+            .position(|f| f as *const _ == frame_ptr)
             .expect("Invalid page frame");
         let mut order = frame.order;
 

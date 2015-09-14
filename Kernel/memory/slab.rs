@@ -46,7 +46,8 @@ impl SlabManager {
             panic!("Failed to initialize a slab allocator");
         }
 
-        self.add(&mut self.allocator);
+        let allocator_ptr = &mut self.allocator as *mut _;
+        self.add(allocator_ptr);
 
         for (&(size, name), allocator) in GENERIC_ALLOCATORS.iter().zip(self.generic_allocators.iter_mut()) {
             if !allocator.init(name, 1, None, size) {
@@ -56,8 +57,8 @@ impl SlabManager {
     }
 
     #[inline]
-    fn add<T>(&mut self, allocator: &'static mut SlabAllocator<T>) {
-        self.list.push_back(unsafe { mem::transmute(allocator) });
+    fn add<T>(&mut self, allocator: *mut SlabAllocator<T>) {
+        self.list.push_back(allocator as *mut SlabAllocator<()>);
     }
 
     pub fn usable_size(&mut self, size: usize, align: usize) -> usize {
@@ -93,10 +94,6 @@ impl SlabManager {
 
     pub fn free(&mut self, ptr: *mut u8, align: usize) {
         panic!("Unimplemented method: SlabManager::free({:?}, {:?})", ptr, align)
-    }
-
-    pub fn stats_print(&mut self) {
-        panic!("Unimplemented method: SlabManager::stats_print()")
     }
 }
 

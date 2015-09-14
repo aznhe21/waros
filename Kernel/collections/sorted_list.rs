@@ -1,6 +1,5 @@
 #![allow(dead_code)]
 
-use prelude::*;
 use collections::linked_list::{LinkedList, LinkedNode, IterMut};
 use core::cmp::Ordering::{self, Less};
 

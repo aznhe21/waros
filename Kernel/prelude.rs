@@ -8,8 +8,6 @@
  * This code has been put into the public domain, there are no restrictions on
  * its use, and the author takes no liability.
  */
-pub use core::prelude::*;
-
 pub use rt::ptr::{UOffset, UOffsetMut};
 pub use rt::option::UnsafeOption;
 
