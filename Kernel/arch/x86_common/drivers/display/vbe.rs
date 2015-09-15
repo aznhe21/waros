@@ -99,10 +99,10 @@ macro_rules! delegate {
             let rgb = color.as_rgb();
             match (self.minfo.rmask, self.minfo.gmask, self.minfo.bmask, self.minfo.resv_mask) {
                 (8, 8, 8, 8) => self.$to(rgb.as_c32() $(, $arg_name)*),
-                (8, 8, 8, 0) => self.$to(rgb          $(, $arg_name)*),
+                (8, 8, 8, 0) => self.$to(rgb.as_c24() $(, $arg_name)*),
                 (5, 6, 5, 0) => self.$to(rgb.as_c16() $(, $arg_name)*),
                 (5, 5, 5, 0) => self.$to(rgb.as_c15() $(, $arg_name)*),
-                _            => self.$to(rgb.as_c8() $(, $arg_name)*),
+                _            => self.$to(rgb.as_c8()  $(, $arg_name)*),
             }
         }
     }
@@ -133,7 +133,7 @@ impl Display for Vbe {
         let size = self.width() as usize * self.height() as usize;
         match (self.minfo.rmask, self.minfo.gmask, self.minfo.bmask, self.minfo.resv_mask) {
             (8, 8, 8, 8) => unsafe { memory::fill32(self.vram(), rgb.as_c32(), size) },
-            (8, 8, 8, 0) => self.clear_by_uint(rgb),
+            (8, 8, 8, 0) => self.clear_by_uint(rgb.as_c24()),
             (5, 6, 5, 0) => unsafe { memory::fill16(self.vram(), rgb.as_c16(), size) },
             (5, 5, 5, 0) => unsafe { memory::fill16(self.vram(), rgb.as_c15(), size) },
             _            => unsafe { memory::fill8(self.vram(), rgb.as_c8(), size) }
