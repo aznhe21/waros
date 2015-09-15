@@ -4,6 +4,7 @@ use memory;
 use arch::page;
 use memory::kernel::PhysAddr;
 use super::{Color, DisplaySize, Display};
+use core::mem;
 use core::{u8, u16, u32};
 use core::ops::Range;
 
@@ -56,15 +57,20 @@ impl Vbe {
         self.minfo.vram() as *mut T
     }
 
+    #[inline(always)]
+    fn bpl<T>(&self) -> usize {
+        self.minfo.logical_scan as usize / mem::size_of::<T>()
+    }
+
     #[inline]
     fn put_by_uint<T: Copy>(&self, color: T, x: DisplaySize, y: DisplaySize) {
         debug_assert!(x >= 0 && x < self.width());
         debug_assert!(y >= 0 && y < self.height());
 
-        let offset = y * self.width() + x;
+        let offset = y as usize * self.bpl::<T>() + x as usize;
         let vram = self.vram::<T>();
         unsafe {
-            *vram.uoffset(offset as usize) = color;
+            *vram.uoffset(offset) = color;
         }
     }
 
@@ -74,8 +80,8 @@ impl Vbe {
         debug_assert!(y >= 0 && y < self.height());
 
         unsafe {
-            let offset = y * self.width();
-            let vram = self.vram::<T>().uoffset(offset as usize);
+            let offset = y as usize * self.bpl::<T>();
+            let vram = self.vram::<T>().uoffset(offset);
             for i in range {
                 *vram.uoffset(i as usize) = color;
             }
@@ -85,7 +91,7 @@ impl Vbe {
     #[inline]
     fn clear_by_uint<T : Copy>(&self, color: T) {
         let vram = self.vram::<T>();
-        for i in 0 .. self.width() as usize * self.height() as usize {
+        for i in 0 .. self.bpl::<u8>() * self.height() as usize {
             unsafe {
                 *vram.uoffset(i) = color;
             }
@@ -130,7 +136,7 @@ impl Display for Vbe {
 
     fn clear(&self, color: Color) {
         let rgb = color.as_rgb();
-        let size = self.width() as usize * self.height() as usize;
+        let size = self.bpl::<u8>() * self.height() as usize;
         match (self.minfo.rmask, self.minfo.gmask, self.minfo.bmask, self.minfo.resv_mask) {
             (8, 8, 8, 8) => unsafe { memory::fill32(self.vram(), rgb.as_c32(), size) },
             (8, 8, 8, 0) => self.clear_by_uint(rgb.as_c24()),
