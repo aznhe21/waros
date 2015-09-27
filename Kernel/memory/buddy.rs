@@ -49,8 +49,7 @@ impl BuddyManager {
         self.orders[order..]
             .iter_mut()
             .enumerate()
-            .filter_map(|(i, frames)| frames.pop_front().map(|frame| (order + i, frame)))
-            .next()
+            .find_map(|(i, frames)| frames.pop_front().map(|frame| (order + i, frame)))
             .map(|(matched_order, frame)| {
                 // 分割
                 for cur_order in (order .. matched_order).rev() {

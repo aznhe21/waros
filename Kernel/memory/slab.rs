@@ -68,7 +68,7 @@ impl SlabManager {
     pub fn allocate(&mut self, size: usize, align: usize) -> *mut u8 {
         let alloc_size = rt::align_up(size, align);
         self.generic_allocators.iter_mut()
-            .filter_map(|allocator| if allocator.object_size >= alloc_size {
+            .find_map(|allocator| if allocator.object_size >= alloc_size {
                 let ptr = allocator.allocate();
                 if !ptr.is_null() {
                     unsafe {
@@ -80,7 +80,6 @@ impl SlabManager {
             } else {
                 None
             })
-            .next()
             .unwrap_or(ptr::null_mut())
     }
 

@@ -10,4 +10,5 @@
  */
 pub use rt::ptr::{UOffset, UOffsetMut};
 pub use rt::option::UnsafeOption;
+pub use rt::iter::IterHelper;
 

@@ -3,6 +3,7 @@ pub use self::utils::*;
 
 pub mod ptr;
 pub mod option;
+pub mod iter;
 mod memory;
 mod utils;
 
