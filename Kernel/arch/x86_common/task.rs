@@ -48,6 +48,9 @@ impl TaskManager {
         let current_task = memory::check_oom(self.slab.allocate());
         self.current_task = current_task;
         self.tasks.push_back(current_task);
+
+        self.reset_timer();
+        interrupt::sti();
     }
 
     pub fn add<T>(&mut self, f: extern "C" fn(arg: T), arg: T) {

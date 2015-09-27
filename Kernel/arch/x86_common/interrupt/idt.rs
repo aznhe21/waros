@@ -169,7 +169,7 @@ pub unsafe extern "C" fn stack_segment_fault_handler(code: u32) {
 
 #[no_mangle]
 pub unsafe extern "C" fn page_fault_handler(esp: *const u32, address: u32) {
-    panic!("Page fault {} to {:X} at {:X}", *esp.uoffset(0), address, *esp.uoffset(1));
+    panic!("Page fault {} to {:p} at {:p}", *esp.uoffset(0), address as *const u8, *esp.uoffset(1) as *const u8);
 }
 
 pub type IrqHandler = fn(irq: IRQ) -> ();

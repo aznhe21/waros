@@ -93,10 +93,11 @@ pub fn kmain() -> ! {
     let (mut pri_count, mut a_count) = ((0usize, 0usize), (0usize, 0usize));
 
     arch::task::manager().add(task_a, &mut a_count.1);
-    arch::task::manager().reset_timer();
 
     let disp_timer = timer::manager().by_queue(event::queue());
     disp_timer.reset(1000);
+
+    //arch::interrupt::hlt();
 
     loop {
         arch::interrupt::cli();
