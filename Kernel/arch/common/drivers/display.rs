@@ -30,12 +30,36 @@ impl RGB {
     }
 
     #[inline]
+    pub fn as_c24(&self) -> (u8, u8, u8) {
+        (self.blue, self.green, self.red)
+    }
+
+    #[inline]
     pub fn as_c32(&self) -> u32 {
         (self.red   as u32) << 16 |
         (self.green as u32) <<  8 |
         (self.blue  as u32)
     }
 }
+
+pub const RGB_TABLE: [RGB; 16] = [
+    RGB { red: 0x00, green: 0x00, blue: 0x00 },// 0:  Black
+    RGB { red: 0xFF, green: 0x00, blue: 0x00 },// 1:  Red
+    RGB { red: 0x00, green: 0xFF, blue: 0x00 },// 2:  Lime
+    RGB { red: 0xFF, green: 0xFF, blue: 0x00 },// 3:  Yellow
+    RGB { red: 0x00, green: 0x00, blue: 0xFF },// 4:  Blue
+    RGB { red: 0xFF, green: 0x00, blue: 0xFF },// 5:  Purple
+    RGB { red: 0x00, green: 0xFF, blue: 0xFF },// 6:  Cyan
+    RGB { red: 0xFF, green: 0xFF, blue: 0xFF },// 7:  White
+    RGB { red: 0xC6, green: 0xC6, blue: 0xC6 },// 8:  Gray
+    RGB { red: 0x84, green: 0x00, blue: 0x00 },// 9:  Dark Red
+    RGB { red: 0x00, green: 0x84, blue: 0x00 },// 10: Green
+    RGB { red: 0x84, green: 0x84, blue: 0x00 },// 11: Dark Yellow
+    RGB { red: 0x00, green: 0x00, blue: 0x84 },// 12: Dark Blue
+    RGB { red: 0x84, green: 0x00, blue: 0x84 },// 13: Dark Purple
+    RGB { red: 0x00, green: 0x84, blue: 0x84 },// 14: Dark Cyan
+    RGB { red: 0x84, green: 0x84, blue: 0x84 },// 15: Dark Gray
+];
 
 #[derive(Clone, Copy)]
 #[repr(u8)]
@@ -82,28 +106,7 @@ impl Color {
             None
         }
     }
-}
 
-pub const RGB_TABLE: [RGB; 16] = [
-    RGB { red: 0x00, green: 0x00, blue: 0x00 },// 0:  Black
-    RGB { red: 0xFF, green: 0x00, blue: 0x00 },// 1:  Red
-    RGB { red: 0x00, green: 0xFF, blue: 0x00 },// 2:  Lime
-    RGB { red: 0xFF, green: 0xFF, blue: 0x00 },// 3:  Yellow
-    RGB { red: 0x00, green: 0x00, blue: 0xFF },// 4:  Blue
-    RGB { red: 0xFF, green: 0x00, blue: 0xFF },// 5:  Purple
-    RGB { red: 0x00, green: 0xFF, blue: 0xFF },// 6:  Cyan
-    RGB { red: 0xFF, green: 0xFF, blue: 0xFF },// 7:  White
-    RGB { red: 0xC6, green: 0xC6, blue: 0xC6 },// 8:  Gray
-    RGB { red: 0x84, green: 0x00, blue: 0x00 },// 9:  Dark Red
-    RGB { red: 0x00, green: 0x84, blue: 0x00 },// 10: Green
-    RGB { red: 0x84, green: 0x84, blue: 0x00 },// 11: Dark Yellow
-    RGB { red: 0x00, green: 0x00, blue: 0x84 },// 12: Dark Blue
-    RGB { red: 0x84, green: 0x00, blue: 0x84 },// 13: Dark Purple
-    RGB { red: 0x00, green: 0x84, blue: 0x84 },// 14: Dark Cyan
-    RGB { red: 0x84, green: 0x84, blue: 0x84 },// 15: Dark Gray
-];
-
-impl Color {
     pub fn as_rgb(&self) -> RGB {
         RGB_TABLE[*self as usize]
     }

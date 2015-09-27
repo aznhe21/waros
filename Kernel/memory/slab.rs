@@ -194,7 +194,7 @@ impl<T: Sized> SlabAllocator<T> {
         match self.partial_list.front_mut() {
             Some(slab) => {
                 let ptr = slab.allocate(self);
-                if !ptr.is_null() {
+                if !ptr.is_null() && !slab.allocatable() {
                     self.partial_list.pop_front();
                     self.full_list.push_back(slab);
                 }
@@ -209,7 +209,11 @@ impl<T: Sized> SlabAllocator<T> {
                         let ptr = slab.allocate(self);
                         if !ptr.is_null() {
                             self.free_list.pop_front();
-                            self.partial_list.push_back(slab);
+                            if slab.allocatable() {
+                                self.partial_list.push_back(slab);
+                            } else {
+                                self.full_list.push_back(slab);
+                            }
                         }
                         ptr
                     },
@@ -337,6 +341,11 @@ impl<T> Slab<T> {
             *b = i + 1;
         }
         bufctl[len - 1] = BUFCTL_END;
+    }
+
+    #[inline]
+    pub fn allocatable(&self) -> bool {
+        self.index != BUFCTL_END
     }
 
     pub fn allocate(&mut self, allocator: &SlabAllocator<T>) -> *mut T {

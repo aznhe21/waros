@@ -169,9 +169,11 @@ pub fn kmain() -> ! {
             Event::Timer(timer_id) => {
                 match timer_id {
                     _ if timer_id == disp_timer.id() => {
-                        log!("Primary: {}, A: {}", pri_count.1 - pri_count.0, a_count.1 - a_count.0);
+                        log!("Primary: {}, A: {}", pri_count.1.wrapping_sub(pri_count.0),
+                            a_count.1.wrapping_sub(a_count.0));
                         pri_count.0 = pri_count.1;
                         a_count.0 = a_count.1;
+
                         disp_timer.reset(1000);
                     },
                     _ => log!("Timer {}", timer_id)
