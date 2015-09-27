@@ -2,6 +2,8 @@
 
 /libcore
 /liballoc
+/librustc_unicode
+/libcollections
 
 /*.dsm
 /*.bin

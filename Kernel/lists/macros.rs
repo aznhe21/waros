@@ -24,7 +24,7 @@ macro_rules! linked_node {
 
 macro_rules! impl_linked_node {
     ($node: ty { prev: $prev: ident, next: $next: ident }) => {
-        impl $crate::collections::linked_list::LinkedNode<$node> for $node {
+        impl $crate::lists::linked_list::LinkedNode<$node> for $node {
             linked_node!($node { prev: $prev, next: $next });
         }
     };

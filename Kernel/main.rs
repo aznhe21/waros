@@ -12,11 +12,17 @@
 #![feature(lang_items)]	//< unwind needs to define lang items
 #![feature(asm)]	//< As a kernel, we need inline assembly
 #![feature(associated_consts, const_fn)]
-#![feature(core_intrinsics, core_slice_ext, core_str_ext)]
+#![feature(core_intrinsics)]
 #![feature(zero_one, num_bits_bytes, step_by, ptr_as_ref, iter_arith)]
+#![feature(unicode, alloc, collections)]
 
 #![no_std]	//< Kernels can't use std
 #![no_builtins]
+
+extern crate rustc_unicode;
+extern crate alloc_system;
+extern crate alloc;
+extern crate collections;
 
 // Macros, need to be loaded before everything else due to how rust parses
 #[macro_use]
@@ -28,9 +34,9 @@ pub mod rt;
 // Prelude
 mod prelude;
 
-// Collections library
+// Lists library
 #[macro_use]
-mod collections;
+mod lists;
 
 // Achitecture-specific modules
 #[cfg(target_arch="x86_64")] #[path="arch/amd64/mod.rs"]

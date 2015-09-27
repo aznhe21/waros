@@ -120,7 +120,7 @@ impl<'a, T> FixedList<'a, T> {
     }
 
     pub fn push_back(&mut self, value: T) {
-        assert!(self.len + 1 < self.data.len(), "FixedList overflowed");
+        assert!(self.len + 1 <= self.data.len(), "FixedList overflowed");
 
         self.data[self.len] = value;
         self.len += 1;

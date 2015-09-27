@@ -3,7 +3,7 @@
 use prelude::*;
 use rt;
 use arch;
-use collections::{LinkedList, LinkedNode};
+use lists::{LinkedList, LinkedNode};
 use memory::kernel::VirtAddr;
 use core::cmp;
 use core::fmt;

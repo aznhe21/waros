@@ -4,7 +4,7 @@ use prelude::*;
 use arch;
 use super::kernel::PhysAddr;
 use multiboot;
-use collections::LinkedList;
+use lists::LinkedList;
 use core::cmp;
 use core::ptr;
 use core::mem;

@@ -2,7 +2,7 @@
 
 use prelude::*;
 use arch::interrupt;
-use collections::{LinkedList, SortedList};
+use lists::{LinkedList, SortedList};
 use event::{Event, EventQueue};
 use core::cmp::Ordering;
 use core::iter::FromIterator;

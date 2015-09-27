@@ -1,13 +1,13 @@
 use prelude::*;
 use arch::interrupt;
-use collections::LinkedList;
+use lists::LinkedList;
 use memory::{self, slab};
 use timer;
 use core::mem;
 use core::ptr;
-use core::slice;
 use core::intrinsics;
 use core::usize;
+use collections::Vec;
 
 const TASK_SWITCH_INTERVAL: usize = 20;
 const TASK_STACK_SIZE: usize = 64 * 1024;
@@ -17,7 +17,7 @@ extern "C" {
 }
 
 pub struct Task {
-    stack: &'static mut [usize],
+    stack: Vec<usize>,
     sp: *mut u8,
     ip: *mut u8,
     prev: *mut Task,
@@ -53,8 +53,11 @@ impl TaskManager {
     pub fn add<T>(&mut self, f: extern "C" fn(arg: T), arg: T) {
         let task = self.free_tasks.pop_front().unwrap_or_else(|| {
             let task = memory::check_oom(self.slab.allocate());
-            let ptr = memory::check_oom_ptr(slab::manager().allocate(TASK_STACK_SIZE, mem::align_of::<usize>()));
-            task.stack = unsafe { slice::from_raw_parts_mut(ptr as *mut usize, TASK_STACK_SIZE / usize::BYTES) };
+            task.stack = Vec::with_capacity(TASK_STACK_SIZE / usize::BYTES);
+            unsafe {
+                let cap = task.stack.capacity();
+                task.stack.set_len(cap);
+            }
             task
         });
 

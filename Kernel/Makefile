@@ -46,8 +46,11 @@ endif
 
 # Objects
 LIBCORE := $(OBJDIR)libcore.rlib
+LIBALLOC_SYSTEM := $(OBJDIR)liballoc_system.rlib
 LIBALLOC := $(OBJDIR)liballoc.rlib
-OBJS := start.o asm.o kernel.o libcore.rlib liballoc.rlib
+LIBRUSTC_UNICODE := $(OBJDIR)librustc_unicode.rlib
+LIBCOLLECTIONS := $(OBJDIR)libcollections.rlib
+OBJS := start.o asm.o kernel.o libcore.rlib liballoc_system.rlib liballoc.rlib librustc_unicode.rlib libcollections.rlib
 OBJS := $(OBJS:%=$(OBJDIR)%)
 BIN := ../kernel.$(ARCH).bin
 GRUB_DIR := ../grub/
@@ -82,8 +85,14 @@ $(GRUB_ISO): $(BIN) $(GRUB_CFG)
 	tar -xmf ../rustc-nightly-src.tar.gz -C ../ rustc-nightly/src/libcore --transform 's~^rustc-nightly/src/~~'
 	cd .. && patch -p0 < libcore_nofp.patch
 
-#../liballoc/lib.rs: ../rustc-nightly-src.tar.gz
-#	tar -xmf ../rustc-nightly-src.tar.gz -C ../ rustc-nightly/src/liballoc --transform 's~^rustc-nightly/src/~~'
+../liballoc/lib.rs: ../rustc-nightly-src.tar.gz
+	tar -xmf ../rustc-nightly-src.tar.gz -C ../ rustc-nightly/src/liballoc --transform 's~^rustc-nightly/src/~~'
+
+../librustc_unicode/lib.rs: ../rustc-nightly-src.tar.gz
+	tar -xmf ../rustc-nightly-src.tar.gz -C ../ rustc-nightly/src/librustc_unicode --transform 's~^rustc-nightly/src/~~'
+
+../libcollections/lib.rs: ../rustc-nightly-src.tar.gz
+	tar -xmf ../rustc-nightly-src.tar.gz -C ../ rustc-nightly/src/libcollections --transform 's~^rustc-nightly/src/~~'
 
 # Compile libcore from ../libcore/
 $(OBJDIR)libcore.rlib: ../libcore/lib.rs $(TARGETSPEC)
@@ -95,10 +104,25 @@ $(OBJDIR)liballoc.rlib: ../liballoc/lib.rs $(LIBCORE) $(TARGETSPEC)
 	@mkdir -p $(dir $@)
 	$(RUSTC) $(RUSTFLAGS) -o $@ --crate-type=lib --emit=link,dep-info $< --extern core=$(LIBCORE)
 
-# Compile rust kernel object
-$(OBJDIR)kernel.o: main.rs $(LIBCORE) $(LIBALLOC) $(TARGETSPEC)
+# Compile librustc_unicode from ../librustc_unicode/
+$(OBJDIR)librustc_unicode.rlib: ../librustc_unicode/lib.rs $(LIBCORE) $(TARGETSPEC)
 	@mkdir -p $(dir $@)
-	$(RUSTC) $(RUSTFLAGS) -o $@ --emit=obj,dep-info $< --extern core=$(LIBCORE) --extern alloc=$(LIBALLOC)
+	$(RUSTC) $(RUSTFLAGS) -o $@ --crate-type=lib --emit=link,dep-info $< --extern core=$(LIBCORE)
+
+# Compile libcollections from ../libcollections/
+$(OBJDIR)libcollections.rlib: ../libcollections/lib.rs $(LIBCORE) $(LIBRUSTC_UNICODE) $(LIBALLOC) $(TARGETSPEC)
+	@mkdir -p $(dir $@)
+	$(RUSTC) $(RUSTFLAGS) -o $@ --crate-type=lib --emit=link,dep-info $< --extern core=$(LIBCORE) --extern rustc_unicode=$(LIBRUSTC_UNICODE) --extern alloc=$(LIBALLOC)
+
+# Compile a dummy crate for liballoc
+$(OBJDIR)liballoc_system.rlib: ../AllocSystem/lib.rs $(LIBCORE) $(TARGETSPEC)
+	@mkdir -p $(dir $@)
+	$(RUSTC) $(RUSTFLAGS) -o $@ --crate-type=lib --emit=link,dep-info $<
+
+# Compile rust kernel object
+$(OBJDIR)kernel.o: main.rs $(LIBCORE) $(LIBALLOC_SYSTEM) $(LIBALLOC) $(LIBRUSTC_UNICODE) $(LIBCOLLECTIONS) $(TARGETSPEC)
+	@mkdir -p $(dir $@)
+	$(RUSTC) $(RUSTFLAGS) -o $@ --emit=obj,dep-info $< --extern core=$(LIBCORE) --extern alloc_system=$(LIBALLOC_SYSTEM) --extern alloc=$(LIBALLOC) --extern rustc_unicode=$(LIBRUSTC_UNICODE) --extern collections=$(LIBCOLLECTIONS)
 
 # Compile architecture's assembly stub
 $(OBJDIR)start.o: arch/$(ARCH)/start.S

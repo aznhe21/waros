@@ -1,5 +1,5 @@
 use arch::interrupt::device;
-use collections::FixedQueue;
+use lists::FixedQueue;
 use timer;
 
 #[derive(Clone, Copy)]
