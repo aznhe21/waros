@@ -102,6 +102,7 @@ static mut idt: InterruptDescriptorTable = InterruptDescriptorTable {
 extern "C" {
     fn idt_null_handler();
     fn idt_0c_handler();
+    fn idt_0d_handler();
     fn idt_0e_handler();
 
     fn irq_handler_0();
@@ -135,6 +136,7 @@ pub unsafe fn init() {
     }
 
     idt.set_exception(0x0C, idt_0c_handler);
+    idt.set_exception(0x0D, idt_0d_handler);
     idt.set_exception(0x0E, idt_0e_handler);
 
     idt.set_interrupt(0x20, irq_handler_0);
@@ -162,9 +164,28 @@ pub unsafe extern "C" fn idt_empty_handler() {
     panic!("Unhandled interrupt");
 }
 
+#[inline]
+fn selector_error_panic(message: &str, code: u32) -> ! {
+    panic!("{} at {}{} of {}",
+           message,
+           if code & 1 != 0 { "external " } else { "" },
+           match code >> 1 & 0b11 {
+               0b00 => "GDT",
+               0b01 => "IDT",
+               0b10 => "LDT",
+               _    => "IDT",
+           },
+           code >> 3);
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn stack_segment_fault_handler(code: u32) {
-    panic!("Stack-segment fault {}", code);
+    selector_error_panic("Stack-segment fault", code);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn general_protection_fault_handler(code: u32) {
+    selector_error_panic("General protection fault", code);
 }
 
 #[no_mangle]

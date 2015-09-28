@@ -1,9 +1,11 @@
 .section .text
 .globl idt_null_handler
 .globl idt_0c_handler
+.globl idt_0d_handler
 .globl idt_0e_handler
 .extern idt_empty_handler
 .extern page_fault_handler
+.extern general_protection_fault_handler
 .extern stack_segment_fault_handler
 
 idt_null_handler:
@@ -16,6 +18,14 @@ idt_0c_handler:
 	pusha
 	push 32(%esp)
 	call stack_segment_fault_handler
+	add $4, %esp
+	popa
+	iret
+
+idt_0d_handler:
+	pusha
+	push 32(%esp)
+	call general_protection_fault_handler
 	add $4, %esp
 	popa
 	iret
