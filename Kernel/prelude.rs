@@ -1,6 +1,6 @@
 /*
  * Rust BareBones OS
- * - By John Hodge (Mutabah/thePowersGang) 
+ * - By John Hodge (Mutabah/thePowersGang)
  *
  * prelude.rs
  * - Definitions meant to be used in every module
@@ -11,4 +11,5 @@
 pub use rt::ptr::{UOffset, UOffsetMut};
 pub use rt::option::UnsafeOption;
 pub use rt::iter::IterHelper;
+pub use rt::slice::SliceHelper;
 
