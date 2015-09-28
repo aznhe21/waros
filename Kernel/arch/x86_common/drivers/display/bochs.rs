@@ -43,7 +43,7 @@ unsafe fn read_reg(index: u16) -> u16 {
     inw(VBE_DISPI_IOPORT_DATA)
 }
 
-//static mut vram: *mut u8 = 0 as *mut u8;
+//static mut vram: *mut u8 = ptr::null_mut();
 
 #[inline(always)]
 pub fn available() -> bool {

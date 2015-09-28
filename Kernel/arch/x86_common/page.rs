@@ -4,6 +4,7 @@ use memory;
 use memory::kernel::{PhysAddr, VirtAddr};
 use core::ops;
 use core::slice;
+use core::ptr;
 use core::{u32, usize};
 
 // TODO: Support PAE
@@ -265,8 +266,8 @@ impl PageTable {
 }
 
 static mut kernel_pt: PageTable = PageTable {
-    pd: 0 as *mut PageDirectoryEntry,
-    pt: 0 as *mut PageTableEntry
+    pd: ptr::null_mut(),
+    pt: ptr::null_mut()
 };
 
 #[inline]

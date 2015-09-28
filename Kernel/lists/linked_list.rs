@@ -32,8 +32,8 @@ impl<T: LinkedNode<T>> LinkedList<T> {
     pub const fn new() -> LinkedList<T> {
         LinkedList {
             len: 0,
-            head: 0 as *mut T,
-            tail: 0 as *mut T
+            head: ptr::null_mut(),
+            tail: ptr::null_mut()
         }
     }
 
@@ -320,8 +320,8 @@ mod tests {
         const fn new(value: usize) -> Node {
             Node {
                 value: value,
-                prev: 0 as *mut Node,
-                next: 0 as *mut Node
+                prev: ptr::null_mut(),
+                next: ptr::null_mut()
             }
         }
     }
