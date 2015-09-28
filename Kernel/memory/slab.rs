@@ -92,7 +92,7 @@ impl SlabManager {
     }
 
     pub fn free(&mut self, ptr: *mut u8, align: usize) {
-        panic!("Unimplemented method: SlabManager::free({:?}, {:?})", ptr, align)
+        log!("Unimplemented method: SlabManager::free({:?}, {:?})", ptr, align)
     }
 }
 
