@@ -8,6 +8,5 @@ pub mod slice;
 mod memory;
 mod utils;
 
-#[cfg(target_arch="x86")]
-pub mod divmod64;
+pub mod divmod;
 

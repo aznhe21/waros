@@ -20,6 +20,9 @@ use logging::Writer;
 #[path = "../x86_common/io.rs"]
 mod x86_io;
 
+// Runtime library (64bit division)
+pub mod rt;
+
 // Multiboot data
 #[path = "../x86_common/multiboot.rs"]
 pub mod multiboot;

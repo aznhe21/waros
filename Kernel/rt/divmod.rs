@@ -1,12 +1,80 @@
 use core::ptr;
 use core::mem;
-use core::{u32, u64, i8, i64};
+use core::{u32, u64, i8, i32, i64};
 
 /* Effects: if rem != 0, *rem = a % b
  * Returns: a / b
  */
-#[no_mangle]
-pub unsafe fn __udivmoddi4(a: u64, b: u64, rem: *mut u64) -> u64 {
+pub unsafe fn udivmod32(mut a: u32, mut b: u32, rem: *mut u32) -> u32 {
+    if b == 0 {
+        0
+    } else {
+        let mut qbit = 1u32;
+        while b as i32 >= 0 {
+            b <<= 1;
+            qbit <<= 1;
+        }
+
+        let mut quot = 0u32;
+        while qbit != 0 {
+            if b <= a {
+                a -= b;
+                quot += qbit;
+            }
+
+            b >>= 1;
+            qbit >>= 1;
+        }
+
+        if !rem.is_null() {
+            *rem = a;
+        }
+
+        quot
+    }
+}
+
+/* Returns: a / b */
+#[inline]
+pub unsafe fn udiv32(a: u32, b: u32) -> u32 {
+    udivmod32(a, b, ptr::null_mut())
+}
+
+/* Returns: a % b */
+#[inline]
+pub unsafe fn umod32(a: u32, b: u32) -> u32 {
+    let mut r: u32 = mem::uninitialized();
+    udivmod32(a, b, &mut r);
+    r
+}
+
+/* Returns: a / b */
+pub unsafe fn idiv32(mut a: i32, mut b: i32) -> i32 {
+    const BITS_IN_DWORD_M1: i32 = (i32::BYTES * i8::BITS) as i32 - 1;
+    let mut s_a = a >> BITS_IN_DWORD_M1;             /* s_a = a < 0 ? -1 : 0 */
+    let s_b = b >> BITS_IN_DWORD_M1;                 /* s_b = b < 0 ? -1 : 0 */
+    a = (a ^ s_a) - s_a;                             /* negate if s_a == -1 */
+    b = (b ^ s_b) - s_b;                             /* negate if s_b == -1 */
+    s_a ^= s_b;                                      /*sign of quotient */
+    (udiv32(a as u32, b as u32) as i32 ^ s_a) - s_a  /* negate if s_a == -1 */
+}
+
+/* Returns: a % b */
+pub unsafe fn imod32(mut a: i32, mut b: i32) -> i32 {
+    const BITS_IN_DWORD_M1: i32 = (i32::BYTES * i8::BITS) as i32 - 1;
+    let mut s = b >> BITS_IN_DWORD_M1;                  /* s = b < 0 ? -1 : 0 */
+    b = (b ^ s) - s;                                    /* negate if s == -1 */
+    s = a >> BITS_IN_DWORD_M1;                          /* s = a < 0 ? -1 : 0 */
+    a = (a ^ s) - s;                                    /* negate if s == -1 */
+
+    return (umod32(a as u32, b as u32) as i32 ^ s) - s; /* negate if s == -1 */
+}
+
+
+/* Effects: if rem != 0, *rem = a % b
+ * Returns: a / b
+ */
+pub unsafe fn udivmod64(a: u64, b: u64, rem: *mut u64) -> u64 {
     #[allow(non_upper_case_globals)]
     const u32_BITS: u32 = u32::BITS as u32;
     #[allow(non_upper_case_globals)]
@@ -238,34 +306,32 @@ pub unsafe fn __udivmoddi4(a: u64, b: u64, rem: *mut u64) -> u64 {
 }
 
 /* Returns: a / b */
-#[no_mangle]
-pub unsafe fn __udivdi3(a: u64, b: u64) -> u64 {
-    __udivmoddi4(a, b, ptr::null_mut())
+#[inline]
+pub unsafe fn udiv64(a: u64, b: u64) -> u64 {
+    udivmod64(a, b, ptr::null_mut())
 }
 
 /* Returns: a % b */
-#[no_mangle]
-pub unsafe fn __umoddi3(a: u64, b: u64) -> u64 {
+#[inline]
+pub unsafe fn umod64(a: u64, b: u64) -> u64 {
     let mut r: u64 = mem::uninitialized();
-    __udivmoddi4(a, b, &mut r);
+    udivmod64(a, b, &mut r);
     r
 }
 
 /* Returns: a / b */
-#[no_mangle]
-pub unsafe fn __divdi3(mut a: i64, mut b: i64) -> i64 {
+pub unsafe fn idiv64(mut a: i64, mut b: i64) -> i64 {
     const BITS_IN_DWORD_M1: i64 = (i64::BYTES * i8::BITS) as i64 - 1;
     let mut s_a = a >> BITS_IN_DWORD_M1;           /* s_a = a < 0 ? -1 : 0 */
     let s_b = b >> BITS_IN_DWORD_M1;               /* s_b = b < 0 ? -1 : 0 */
     a = (a ^ s_a) - s_a;                           /* negate if s_a == -1 */
     b = (b ^ s_b) - s_b;                           /* negate if s_b == -1 */
     s_a ^= s_b;                                    /*sign of quotient */
-    (__udivmoddi4(a as u64, b as u64, ptr::null_mut()) as i64 ^ s_a) - s_a  /* negate if s_a == -1 */
+    (udivmod64(a as u64, b as u64, ptr::null_mut()) as i64 ^ s_a) - s_a  /* negate if s_a == -1 */
 }
 
 /* Returns: a % b */
-#[no_mangle]
-pub unsafe fn __moddi3(mut a: i64, mut b: i64) -> i64 {
+pub unsafe fn imod64(mut a: i64, mut b: i64) -> i64 {
     const BITS_IN_DWORD_M1: i64 = (i64::BYTES * i8::BITS) as i64 - 1;
     let mut s = b >> BITS_IN_DWORD_M1;  /* s = b < 0 ? -1 : 0 */
     b = (b ^ s) - s;                    /* negate if s == -1 */
@@ -273,7 +339,7 @@ pub unsafe fn __moddi3(mut a: i64, mut b: i64) -> i64 {
     a = (a ^ s) - s;                    /* negate if s == -1 */
 
     let mut r: u64 = mem::uninitialized();
-    __udivmoddi4(a as u64, b as u64, &mut r);
+    udivmod64(a as u64, b as u64, &mut r);
     return (r as i64 ^ s) - s;          /* negate if s == -1 */
 }
 
@@ -282,26 +348,39 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_divmod32() {
+        unsafe {
+            assert_eq!(udiv32(15, 5), 3);
+            assert_eq!(udiv32(14, 4), 3);
+            assert_eq!(udiv32(13, 3), 4);
+
+            assert_eq!(umod32(15, 5), 0);
+            assert_eq!(umod32(14, 4), 2);
+            assert_eq!(umod32(13, 3), 1);
+        }
+    }
+
+    #[test]
     fn test_divmod64() {
         unsafe {
             /* 0 X
              * ---
              * 0 X
              */
-            assert_eq!(__udivdi3(15, 5), 3);
-            assert_eq!(__udivdi3(14, 4), 3);
-            assert_eq!(__udivdi3(13, 3), 4);
+            assert_eq!(udiv64(15, 5), 3);
+            assert_eq!(udiv64(14, 4), 3);
+            assert_eq!(udiv64(13, 3), 4);
 
-            assert_eq!(__umoddi3(15, 5), 0);
-            assert_eq!(__umoddi3(14, 4), 2);
-            assert_eq!(__umoddi3(13, 3), 1);
+            assert_eq!(umod64(15, 5), 0);
+            assert_eq!(umod64(14, 4), 2);
+            assert_eq!(umod64(13, 3), 1);
 
             /* 0 X
              * ---
              * K X
              */
-            assert_eq!(__udivdi3(15, (3 << 32) + 3), 0);
-            assert_eq!(__umoddi3(15, (3 << 32) + 3), 15);
+            assert_eq!(udiv64(15, (3 << 32) + 3), 0);
+            assert_eq!(umod64(15, (3 << 32) + 3), 15);
 
             /* K X
              * ---
@@ -313,41 +392,41 @@ mod tests {
              * ---
              * K 0
              */
-            assert_eq!(__udivdi3(15 << 32, 3 << 32), 5);
-            assert_eq!(__umoddi3(15 << 32, 3 << 32), 0);
+            assert_eq!(udiv64(15 << 32, 3 << 32), 5);
+            assert_eq!(umod64(15 << 32, 3 << 32), 0);
 
             /* K K
              * ---
              * K 0
              */
             // b is a power of 2
-            assert_eq!(__udivdi3((15 << 32) + 15, 2 << 32), 7);
-            assert_eq!(__umoddi3((15 << 32) + 15, 2 << 32), 4294967311);
+            assert_eq!(udiv64((15 << 32) + 15, 2 << 32), 7);
+            assert_eq!(umod64((15 << 32) + 15, 2 << 32), 4294967311);
 
             /* K K
              * ---
              * K 0
              */
-            assert_eq!(__udivdi3((15 << 32) + 15, 3 << 32), 5);
-            assert_eq!(__umoddi3((15 << 32) + 15, 3 << 32), 15);
+            assert_eq!(udiv64((15 << 32) + 15, 3 << 32), 5);
+            assert_eq!(umod64((15 << 32) + 15, 3 << 32), 15);
 
             /* K X
              * ---
              * 0 K
              */
-            assert_eq!(__udivdi3((15 << 32) + 15, 3), 21474836485);
-            assert_eq!(__umoddi3((15 << 32) + 15, 3), 0);
+            assert_eq!(udiv64((15 << 32) + 15, 3), 21474836485);
+            assert_eq!(umod64((15 << 32) + 15, 3), 0);
 
             /* K X
              * ---
              * K K
              */
-            assert_eq!(__udivdi3((15 << 32) + 15, (3 << 32) + 3), 5);
-            assert_eq!(__umoddi3((15 << 32) + 15, (3 << 32) + 3), 0);
+            assert_eq!(udiv64((15 << 32) + 15, (3 << 32) + 3), 5);
+            assert_eq!(umod64((15 << 32) + 15, (3 << 32) + 3), 0);
 
             /* i64 */
-            assert_eq!(__divdi3((-15 << 32) + 15, 2 << 32), -7);
-            assert_eq!(__moddi3((-15 << 32) + 15, 2 << 32), -4294967281);
+            assert_eq!(idiv64((-15 << 32) + 15, 2 << 32), -7);
+            assert_eq!(imod64((-15 << 32) + 15, 2 << 32), -4294967281);
         }
     }
 
@@ -359,7 +438,7 @@ mod tests {
              * ---
              * 0 0
              */
-            __udivdi3((15 << 32) + 15, 0);
+            udiv64((15 << 32) + 15, 0);
         }
     }
 }

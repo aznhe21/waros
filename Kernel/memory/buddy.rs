@@ -2,8 +2,8 @@
 
 use prelude::*;
 use arch;
+use arch::multiboot;
 use super::kernel::PhysAddr;
-use multiboot;
 use lists::LinkedList;
 use core::cmp;
 use core::ptr;
