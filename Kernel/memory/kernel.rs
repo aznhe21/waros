@@ -8,22 +8,22 @@ pub struct PhysAddr(u64);
 
 impl PhysAddr {
     #[inline(always)]
-    pub fn from_raw(addr: u64) -> PhysAddr {
+    pub const fn from_raw(addr: u64) -> PhysAddr {
         PhysAddr(addr)
     }
 
     #[inline(always)]
-    pub fn null() -> PhysAddr {
+    pub const fn null() -> PhysAddr {
         PhysAddr(0)
     }
 
     #[inline(always)]
-    pub fn value(&self) -> u64 {
+    pub const fn value(&self) -> u64 {
         self.0
     }
 
     #[inline(always)]
-    pub fn is_null(&self) -> bool {
+    pub const fn is_null(&self) -> bool {
         self.0 == 0
     }
 
@@ -64,7 +64,7 @@ pub struct VirtAddr(usize);
 
 impl VirtAddr {
     #[inline(always)]
-    pub fn from_raw(addr: usize) -> VirtAddr {
+    pub const fn from_raw(addr: usize) -> VirtAddr {
         VirtAddr(addr)
     }
 
@@ -79,17 +79,17 @@ impl VirtAddr {
     }
 
     #[inline(always)]
-    pub fn null() -> VirtAddr {
+    pub const fn null() -> VirtAddr {
         VirtAddr(0)
     }
 
     #[inline(always)]
-    pub fn value(&self) -> usize {
+    pub const fn value(&self) -> usize {
         self.0
     }
 
     #[inline(always)]
-    pub fn is_null(&self) -> bool {
+    pub const fn is_null(&self) -> bool {
         self.0 == 0
     }
 
@@ -100,12 +100,12 @@ impl VirtAddr {
     }
 
     #[inline(always)]
-    pub fn as_ptr<T>(&self) -> *const T {
+    pub const fn as_ptr<T>(&self) -> *const T {
         self.value() as *const T
     }
 
     #[inline(always)]
-    pub fn as_mut_ptr<T>(&self) -> *mut T {
+    pub const fn as_mut_ptr<T>(&self) -> *mut T {
         self.value() as *mut T
     }
 }
