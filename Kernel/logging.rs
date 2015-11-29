@@ -24,7 +24,8 @@ impl Writer
 {
     /// Obtain a logger for the specified module
     pub fn get(module: &str) -> Writer {
-        let mut ret = Writer::get_without_module();
+        // This "acquires" the lock (actually just disables output if paralel writes are attempted
+        let mut ret = Writer( ! LOGGING_LOCK.swap(true, atomic::Ordering::Acquire) );
 
         // Print the module name before returning (prefixes all messages)
         {
@@ -33,11 +34,6 @@ impl Writer
         }
 
         ret
-    }
-
-    pub fn get_without_module() -> Writer {
-        // This "acquires" the lock (actually just disables output if paralel writes are attempted
-        Writer( ! LOGGING_LOCK.swap(true, atomic::Ordering::Acquire) )
     }
 
     pub unsafe fn force_unlock() {

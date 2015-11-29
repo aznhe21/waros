@@ -98,7 +98,7 @@ pub fn print_backtrace() {
         asm!("mov %ebp, $0" : "=r"(bp) ::: "volatile");
     }
 
-    let mut writer = Writer::get_without_module();
+    let mut writer = Writer::get(module_path!());
     let _ = write!(&mut writer, "Backtrace: {:x}", bp);
 
     while let Some((newbp, ip)) = backtrace(bp) {
