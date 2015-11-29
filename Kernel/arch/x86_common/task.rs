@@ -50,7 +50,7 @@ impl TaskManager {
         self.tasks.push_back(current_task);
 
         self.reset_timer();
-        interrupt::sti();
+        interrupt::enable();
     }
 
     pub fn add<T>(&mut self, f: extern "C" fn(arg: T), arg: T) {
@@ -89,7 +89,7 @@ impl TaskManager {
         if man.tasks.len() != 1 {
             man.switch_to_next();
         } else {
-            interrupt::sti();
+            interrupt::enable();
         }
     }
 
@@ -118,7 +118,7 @@ impl TaskManager {
     }
 
     pub fn terminate(&mut self, task: &'static mut Task) -> ! {
-        interrupt::cli();
+        interrupt::disable();
         self.tasks.remove(task);
         if self.tasks.len() == 0 {
             panic!("There are no tasks");

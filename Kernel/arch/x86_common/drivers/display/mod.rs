@@ -19,7 +19,7 @@ fn set_rgb_palette() {
 
 unsafe fn set_palette(start: u8, table: &[display::RGB]) {
     let eflags = load_eflags();
-    interrupt::cli();
+    interrupt::disable();
     outb(0x03C8, start);
     for rgb in table {
         outb(0x03C9, rgb.red   / 4);

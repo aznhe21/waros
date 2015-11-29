@@ -109,7 +109,7 @@ impl TimerEntity {
     }
 
     pub fn reset(&'static mut self, delay: usize) {
-        interrupt::cli();
+        interrupt::disable();
         let man = manager();
         self.tick = man.counter() + delay;
         man.ticking_timers.push(self);

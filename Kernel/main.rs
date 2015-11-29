@@ -91,10 +91,10 @@ pub fn kmain() -> ! {
     let disp_timer = timer::manager().by_queue(event::queue());
     disp_timer.reset(1000);
 
-    //arch::interrupt::hlt();
+    //arch::interrupt::wait();
 
     loop {
-        arch::interrupt::cli();
+        arch::interrupt::disable();
         pri_count.1 += 1;
 
         match event::Event::get() {
@@ -177,8 +177,8 @@ pub fn kmain() -> ! {
                 }
             },
             _ => {
-                //arch::interrupt::sti_hlt();
-                arch::interrupt::sti();
+                //arch::interrupt::enable_wait();
+                arch::interrupt::enable();
             }
         }
     }

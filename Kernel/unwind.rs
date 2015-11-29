@@ -17,7 +17,7 @@ use core::fmt;
 #[no_mangle]
 pub extern "C" fn rust_begin_unwind(args: fmt::Arguments, file: &'static str, line: usize) -> !
 {
-    arch::interrupt::cli();
+    arch::interrupt::disable();
     unsafe {
         Writer::force_unlock();
     }

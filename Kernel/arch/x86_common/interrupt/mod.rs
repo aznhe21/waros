@@ -27,28 +27,28 @@ const KERNEL_CS: usize = GDT_ENTRY_KERNEL_CS * 8;
 const KERNEL_DS: usize = GDT_ENTRY_KERNEL_DS * 8;
 
 #[inline(always)]
-pub extern "C" fn sti() {
+pub extern "C" fn enable() {
     unsafe {
         asm!("sti" :::: "volatile");
     }
 }
 
 #[inline(always)]
-pub extern "C" fn hlt() {
+pub extern "C" fn wait() {
     unsafe {
         asm!("hlt" :::: "volatile");
     }
 }
 
 #[inline(always)]
-pub extern "C" fn sti_hlt() {
+pub extern "C" fn enable_wait() {
     unsafe {
         asm!("sti \n hlt" :::: "volatile");
     }
 }
 
 #[inline(always)]
-pub extern "C" fn cli() {
+pub extern "C" fn disable() {
     unsafe {
         asm!("cli" :::: "volatile");
     }
@@ -63,7 +63,7 @@ pub fn pre_init() {
         pit::pre_init();
 
         a20::enable();
-        cli();
+        self::disable();
     }
 }
 
@@ -76,7 +76,7 @@ pub fn init() {
         pit::init();
         device::init();
 
-        sti();
+        self::enable();
     }
 }
 
