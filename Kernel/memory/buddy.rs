@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use rt::{IterHelper, UnsafeOption};
 use arch;
 use arch::multiboot;

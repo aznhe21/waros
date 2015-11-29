@@ -33,7 +33,7 @@ pub mod rt;
 
 // Lists library
 #[macro_use]
-mod lists;
+pub mod lists;
 
 // Achitecture-specific modules
 #[cfg(target_arch="x86_64")] #[path="arch/amd64/mod.rs"]
@@ -47,14 +47,14 @@ mod num_traits;
 pub mod unwind;
 
 // Logging code
-mod logging;
+pub mod logging;
 
 // Memory management
 pub mod memory;
 
-mod event;
+pub mod event;
 
-mod timer;
+pub mod timer;
 
 // Kernel entrypoint
 #[lang="start"]

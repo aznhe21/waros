@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use rt::UnsafeOption;
 use arch::interrupt;
 use lists::{LinkedList, SortedList};

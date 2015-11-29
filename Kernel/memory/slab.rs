@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use rt::{self, IterHelper, UnsafeOption};
 use arch;
 use lists::{LinkedList, LinkedNode};
@@ -240,10 +238,10 @@ impl<T: Sized> SlabAllocator<T> {
         }
     }
 
-    fn matches(&self, ptr: *mut T) -> bool {
+    /*fn matches(&self, ptr: *mut T) -> bool {
         self.partial_list.iter_mut().chain(self.full_list.iter_mut())
             .any(|slab| slab.matches(self, ptr))
-    }
+    }*/
 
     fn grow(&mut self) {
         let slab_order = usize::BITS - ((self.slab_size / arch::FRAME_SIZE).leading_zeros() - 1) as usize;

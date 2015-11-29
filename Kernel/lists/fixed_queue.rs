@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use core::mem;
 
 pub struct FixedQueue<'a, T: 'a> {

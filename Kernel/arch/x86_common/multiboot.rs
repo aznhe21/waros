@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use rt;
 use arch;
 use core::mem;

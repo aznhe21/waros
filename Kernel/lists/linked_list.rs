@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use core::ptr;
 use core::iter;
 use core::marker::PhantomData;

@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use core::mem;
 use core::ptr;
 use core::intrinsics;
