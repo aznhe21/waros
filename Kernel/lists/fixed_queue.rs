@@ -33,7 +33,12 @@ impl<'a, T> FixedQueue<'a, T> {
     #[inline]
     pub fn is_empty(&self) -> bool { self.read == self.write }
 
+    #[inline]
     pub fn push(&mut self, value: T) {
+        *self.emplace_back() = value;
+    }
+
+    pub fn emplace_back(&mut self) -> &mut T {
         let cur = self.write;
         self.write = self.step(self.write);
         if self.read == self.write {
@@ -41,7 +46,7 @@ impl<'a, T> FixedQueue<'a, T> {
             log!("FixedQueue overflowed");
         }
 
-        self.data[cur] = value;
+        &mut self.data[cur]
     }
 
     pub fn pop(&mut self) -> Option<T> {
