@@ -52,6 +52,8 @@ pub mod logging;
 // Memory management
 pub mod memory;
 
+pub mod task;
+
 pub mod event;
 
 pub mod timer;
@@ -71,7 +73,7 @@ pub fn kmain() -> ! {
     event::init();
     timer::init();
     arch::interrupt::init();
-    arch::task::init();
+    task::init();
 
     log!("Total: {} MB Free: {} MB", memory::buddy::manager().total_size() / 1024 / 1024,
         memory::buddy::manager().free_size() / 1024 / 1024);
@@ -86,7 +88,7 @@ pub fn kmain() -> ! {
 
     let (mut pri_count, mut a_count) = ((0usize, 0usize), (0usize, 0usize));
 
-    arch::task::manager().add(task_a, &mut a_count.1);
+    task::manager().add(task_a, &(&mut a_count.1 as *mut usize));
 
     let disp_timer = timer::manager().by_queue(event::queue());
     disp_timer.reset(1000);
@@ -184,12 +186,13 @@ pub fn kmain() -> ! {
     }
 }
 
-extern "C" fn task_a(a_count: &mut usize) {
+extern "C" fn task_a(a_count: &*mut usize) {
     use core::intrinsics;
+
     log!("Task-A has launched");
     loop {
         unsafe {
-            intrinsics::volatile_store(a_count, intrinsics::overflowing_add(intrinsics::volatile_load(a_count), 1));
+            intrinsics::volatile_store(*a_count, intrinsics::overflowing_add(intrinsics::volatile_load(*a_count), 1));
         }
     }
 }
