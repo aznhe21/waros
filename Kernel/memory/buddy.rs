@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use prelude::*;
+use rt::{IterHelper, UnsafeOption};
 use arch;
 use arch::multiboot;
 use super::kernel::PhysAddr;
@@ -76,7 +76,7 @@ impl BuddyManager {
 
         while order < MAX_ORDER {
             let count = 1 << order;
-            let buddy = unsafe { &mut *self.frames.as_mut_ptr().uoffset(top_index ^ count) };
+            let buddy = unsafe { &mut *self.frames.as_mut_ptr().offset((top_index ^ count) as isize) };
 
             if buddy.using || buddy.order != order {
                 break;
@@ -88,7 +88,7 @@ impl BuddyManager {
         }
 
         unsafe {
-            let top = self.frames.as_mut_ptr().uoffset(top_index);
+            let top = self.frames.as_mut_ptr().offset(top_index as isize);
             (*top).using = false;
             (*top).order = order;
             self.orders[order].push_front(top);
@@ -126,7 +126,7 @@ impl PageFrame {
 
     #[inline]
     fn divide_by(&mut self, order: usize) -> &mut PageFrame {
-        unsafe { &mut *(self as *mut PageFrame).uoffset(1 << (order - 1)) }
+        unsafe { &mut *(self as *mut PageFrame).offset((1 << (order - 1)) as isize) }
     }
 
     #[inline(always)]

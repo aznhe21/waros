@@ -1,7 +1,6 @@
 #![allow(dead_code)]
 
-use prelude::*;
-use rt;
+use rt::{self, IterHelper, UnsafeOption};
 use arch;
 use lists::{LinkedList, LinkedNode};
 use memory::kernel::VirtAddr;
@@ -72,7 +71,7 @@ impl SlabManager {
                 let ptr = allocator.allocate();
                 if !ptr.is_null() {
                     unsafe {
-                        Some(ptr.uoffset(alloc_size - size))
+                        Some(ptr.offset((alloc_size - size) as isize))
                     }
                 } else {
                     None
@@ -356,13 +355,13 @@ impl<T> Slab<T> {
             let index = self.index;
             self.index = mem::replace(&mut bufctl[index], BUFCTL_ALLOCATED);
             let offset = rt::align_up(allocator.object_size, allocator.align);
-            unsafe { self.ptr.uoffset(offset * index) as *mut T }
+            unsafe { self.ptr.offset((offset * index) as isize) as *mut T }
         }
     }
 
     pub fn matches(&self, allocator: &SlabAllocator<T>, ptr: *mut T) -> bool {
         let ptr_u8 = ptr as *mut u8;
-        let last = unsafe { self.ptr.uoffset(allocator.object_size * allocator.objects_per_slab) };
+        let last = unsafe { self.ptr.offset((allocator.object_size * allocator.objects_per_slab) as isize) };
         ptr_u8 >= self.ptr && ptr_u8 < last
     }
 
@@ -392,7 +391,7 @@ impl<T> Slab<T> {
     #[inline(always)]
     fn bufctl(&mut self, len: usize) -> &'static mut [Bufctl] {
         unsafe {
-            let bufctl = (self as *mut Self).uoffset(1) as *mut Bufctl;
+            let bufctl = (self as *mut Self).offset(1) as *mut Bufctl;
             slice::from_raw_parts_mut(bufctl, len)
         }
     }

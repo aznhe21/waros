@@ -1,6 +1,5 @@
 #![allow(dead_code)]
 
-use prelude::*;
 use core::mem;
 use core::ptr;
 use core::intrinsics;
@@ -37,7 +36,7 @@ impl<'a, T> FixedList<'a, T> {
     pub fn iter(&self) -> Iter<T> {
         Iter {
             ptr: self.data.as_ptr(),
-            end: unsafe { self.data.as_ptr().uoffset(self.len) },
+            end: unsafe { self.data.as_ptr().offset(self.len as isize) },
             _marker: PhantomData
         }
     }
@@ -46,7 +45,7 @@ impl<'a, T> FixedList<'a, T> {
     pub fn iter_mut(&mut self) -> IterMut<T> {
         IterMut {
             ptr: self.data.as_mut_ptr(),
-            end: unsafe { self.data.as_mut_ptr().uoffset(self.len) },
+            end: unsafe { self.data.as_mut_ptr().offset(self.len as isize) },
             _marker: PhantomData
         }
     }
@@ -141,8 +140,8 @@ impl<'a, T> FixedList<'a, T> {
         assert!(index <= self.len && index < self.data.len());
 
         unsafe {
-            let ptr = self.data.as_mut_ptr().uoffset(index);
-            ptr::copy(ptr, ptr.uoffset(1), self.len - index);
+            let ptr = self.data.as_mut_ptr().offset(index as isize);
+            ptr::copy(ptr, ptr.offset(1), self.len - index);
             ptr::write(ptr, value);
         }
         self.len += 1;
@@ -153,9 +152,9 @@ impl<'a, T> FixedList<'a, T> {
         self.len -= 1;
 
         unsafe {
-            let ptr = self.data.as_mut_ptr().uoffset(index);
+            let ptr = self.data.as_mut_ptr().offset(index as isize);
             let ret = ptr::read(ptr);
-            ptr::copy(ptr.uoffset(1), ptr, self.len - index);
+            ptr::copy(ptr.offset(1), ptr, self.len - index);
             ret
         }
     }
@@ -166,8 +165,8 @@ impl<'a, T> FixedList<'a, T> {
             self.len -= len;
 
             unsafe {
-                let ptr = self.data.as_mut_ptr().uoffset(index);
-                ptr::copy(ptr.uoffset(len), ptr, self.len - (index + len - 1));
+                let ptr = self.data.as_mut_ptr().offset(index as isize);
+                ptr::copy(ptr.offset(len as isize), ptr, self.len - (index + len - 1));
             }
         }
     }
@@ -251,7 +250,7 @@ impl<'a, T> Iterator for Iter<'a, T> {
         } else {
             unsafe {
                 let old = self.ptr;
-                self.ptr = self.ptr.uoffset(1);
+                self.ptr = self.ptr.offset(1);
                 Some(&*old)
             }
         }
@@ -281,7 +280,7 @@ impl<'a, T> Iterator for IterMut<'a, T> {
         } else {
             unsafe {
                 let old = self.ptr;
-                self.ptr = self.ptr.uoffset(1);
+                self.ptr = self.ptr.offset(1);
                 Some(&mut *old)
             }
         }

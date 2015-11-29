@@ -1,4 +1,3 @@
-use prelude::*;
 use super::pic::IRQ;
 use core::mem;
 
@@ -190,10 +189,10 @@ pub unsafe extern "C" fn general_protection_fault_handler(code: u32) {
 
 #[no_mangle]
 pub unsafe extern "C" fn page_fault_handler(esp: *const u32, address: u32) {
-    panic!("Page fault {} to {:p} at {:p}", *esp.uoffset(0), address as *const u8, *esp.uoffset(1) as *const u8);
+    panic!("Page fault {} to {:p} at {:p}", *esp.offset(0), address as *const u8, *esp.offset(1) as *const u8);
 }
 
-pub type IrqHandler = fn(irq: IRQ) -> ();
+pub type IrqHandler = fn(IRQ);
 static mut irq_handlers: [IrqHandler; 16] = [irq_null_handler; 16];
 
 #[inline(always)]

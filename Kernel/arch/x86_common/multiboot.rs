@@ -1,6 +1,5 @@
 #![allow(dead_code)]
 
-use prelude::*;
 use rt;
 use arch;
 use core::mem;
@@ -45,7 +44,7 @@ pub fn init() {
     assert!(magic_valid(), "Invalid multiboot magic");
 
     let info = unsafe {
-        mboot_ptr = (mboot_ptr as *mut u8).uoffset(arch::KERNEL_BASE) as *mut MultibootInfo;
+        mboot_ptr = (mboot_ptr as *mut u8).offset(arch::KERNEL_BASE as isize) as *mut MultibootInfo;
         &mut *mboot_ptr
     };
     info.cmdline += arch::KERNEL_BASE as u32;

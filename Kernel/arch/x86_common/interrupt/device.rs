@@ -27,7 +27,7 @@ unsafe fn wait_for_write() -> bool {
 static mut queue: Option<&'static mut EventQueue> = None;
 
 mod keyboard {
-    use prelude::*;
+    use rt::UnsafeOption;
     use arch::x86_io::inb;
     use event::Event;
     use super::super::idt;
@@ -55,7 +55,7 @@ mod keyboard {
 }
 
 mod mouse {
-    use prelude::*;
+    use rt::UnsafeOption;
     use arch::x86_io::{outb, inb};
     use event::Event;
     use super::super::idt;

@@ -1,4 +1,4 @@
-use prelude::*;
+use rt::UnsafeOption;
 use arch::interrupt;
 use lists::LinkedList;
 use memory::{self, slab};

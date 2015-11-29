@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use prelude::*;
+use rt::UnsafeOption;
 use arch::interrupt;
 use lists::{LinkedList, SortedList};
 use event::{Event, EventQueue};

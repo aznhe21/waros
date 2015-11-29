@@ -31,9 +31,6 @@ mod macros;
 // Runtime functions
 pub mod rt;
 
-// Prelude
-mod prelude;
-
 // Lists library
 #[macro_use]
 mod lists;

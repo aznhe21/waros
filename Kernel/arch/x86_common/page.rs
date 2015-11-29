@@ -1,4 +1,3 @@
-use prelude::*;
 use arch;
 use memory;
 use memory::kernel::{PhysAddr, VirtAddr};
@@ -40,7 +39,7 @@ impl PageDirectoryEntry {
         let index = addr.value() >> 12 & 0x03FF;
         debug_assert!(index < PageTableEntry::LEN);
         unsafe {
-            &mut *self.page_table().uoffset(index)
+            &mut *self.page_table().offset(index as isize)
         }
     }
 
@@ -161,7 +160,7 @@ impl PageTable {
 
         unsafe {
             for i in 0 .. PageDirectoryEntry::LEN {
-                *pd_ptr.uoffset(i) = PageDirectoryEntry::from_4kb_aligned(base_addr + i as u32);
+                *pd_ptr.offset(i as isize) = PageDirectoryEntry::from_4kb_aligned(base_addr + i as u32);
             }
             memory::fill32(pt_ptr as *mut u32, 0, PageTableEntry::LEN * PageDirectoryEntry::LEN / u32::BYTES);
         }
@@ -188,7 +187,7 @@ impl PageTable {
 
     #[inline]
     fn get_pde(&mut self, addr: VirtAddr) -> &mut PageDirectoryEntry {
-        unsafe { &mut *self.pd.uoffset(PageTable::get_pde_index(addr)) }
+        unsafe { &mut *self.pd.offset(PageTable::get_pde_index(addr) as isize) }
     }
 
     #[inline]

@@ -1,4 +1,3 @@
-use prelude::*;
 use memory;
 use arch::multiboot;
 use arch::page;
@@ -67,10 +66,10 @@ impl Vbe {
         debug_assert!(x >= 0 && x < self.width());
         debug_assert!(y >= 0 && y < self.height());
 
-        let offset = y as usize * self.bpl::<T>() + x as usize;
+        let offset = y as isize * self.bpl::<T>() as isize + x as isize;
         let vram = self.vram::<T>();
         unsafe {
-            *vram.uoffset(offset) = color;
+            *vram.offset(offset) = color;
         }
     }
 
@@ -80,10 +79,10 @@ impl Vbe {
         debug_assert!(y >= 0 && y < self.height());
 
         unsafe {
-            let offset = y as usize * self.bpl::<T>();
-            let vram = self.vram::<T>().uoffset(offset);
+            let offset = y as isize * self.bpl::<T>() as isize;
+            let vram = self.vram::<T>().offset(offset);
             for i in range {
-                *vram.uoffset(i as usize) = color;
+                *vram.offset(i as isize) = color;
             }
         }
     }
@@ -91,9 +90,9 @@ impl Vbe {
     #[inline]
     fn clear_by_uint<T : Copy>(&self, color: T) {
         let vram = self.vram::<T>();
-        for i in 0 .. self.bpl::<u8>() * self.height() as usize {
+        for i in 0 .. self.bpl::<u8>() as isize * self.height() as isize {
             unsafe {
-                *vram.uoffset(i) = color;
+                *vram.offset(i) = color;
             }
         }
     }
