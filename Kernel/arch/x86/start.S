@@ -40,6 +40,7 @@ mboot:
 /* === Code === */
 .section .inittext, "ax"
 .globl start
+.extern x86_pre_init
 start:
 	/* EFLAGSをリセット */
 	pushl $0
@@ -87,6 +88,7 @@ start:
 	/* higherにジャンプしてCSを2*0x08（コードセグメント）にセット */
 	ljmp $2*0x08, $start_high
 .section .text
+.extern x86_init
 .extern kmain
 start_high:
 	/* Clear identity mapping */
@@ -101,6 +103,7 @@ start_high:
 	mov %ax, %fs
 	mov %ax, %gs
 
+	call x86_init
 	call kmain
 
 	/* If kmain returns, loop forever */

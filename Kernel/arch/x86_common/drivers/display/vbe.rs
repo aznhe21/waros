@@ -1,6 +1,6 @@
 use prelude::*;
-use multiboot;
 use memory;
+use arch::multiboot;
 use arch::page;
 use memory::kernel::PhysAddr;
 use super::{Color, DisplaySize, Display};

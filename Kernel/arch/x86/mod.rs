@@ -11,6 +11,7 @@
  */
 #![allow(dead_code)]
 
+use memory;
 use memory::kernel::VirtAddr;
 use core::fmt::Write;
 use logging::Writer;
@@ -18,6 +19,10 @@ use logging::Writer;
 // x86 port IO
 #[path = "../x86_common/io.rs"]
 mod x86_io;
+
+// Multiboot data
+#[path = "../x86_common/multiboot.rs"]
+pub mod multiboot;
 
 // Serial output channel
 #[path = "../x86_common/serial.rs"]
@@ -71,13 +76,17 @@ pub fn x86_prep_page_table(buf: &mut [u32; 1024 * 16]) {
 
 #[no_mangle]
 pub fn x86_pre_init() {
-    log!("WARos: pre boot");
-
     interrupt::pre_init();
 
-    /*while !serial::is_transmit_empty() {
-        // Do nothing
-    }*/
+    log!("WARos: pre boot");
+}
+
+#[no_mangle]
+pub fn x86_init() {
+    log!("WARos: Switched to protected mode");
+
+    multiboot::init();
+    memory::init_by_multiboot(multiboot::info().mmap().expect("Memory map not provided"));
 }
 
 pub fn print_backtrace() {

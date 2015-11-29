@@ -1,6 +1,6 @@
+use arch::multiboot;
 use arch::x86_io::{inw, outw};
 use super::{Color, DisplaySize, Display};
-use multiboot;
 
 const VBE_DISPI_IOPORT_INDEX: u16 = 0x01CE;
 const VBE_DISPI_IOPORT_DATA:  u16 = 0x01CF;

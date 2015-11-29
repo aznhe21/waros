@@ -1,4 +1,4 @@
-use multiboot;
+use arch::multiboot;
 use arch::page;
 
 pub mod rust;

@@ -52,9 +52,6 @@ pub mod unwind;
 // Logging code
 mod logging;
 
-// Multiboot data
-mod multiboot;
-
 // Memory management
 pub mod memory;
 
@@ -71,10 +68,6 @@ pub fn kmain() -> ! {
     use arch::interrupt::device::Device;
     use arch::drivers::display::{self, Color, Display, DisplaySize};
 
-    log!("WARos: Switched to protected mode");
-
-    multiboot::init();
-    memory::init_by_multiboot(multiboot::info().mmap().expect("Memory map not provided"));
     timer::init();
     arch::interrupt::init();
     arch::task::init();
