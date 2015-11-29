@@ -152,7 +152,7 @@ impl KernelMemory {
 static mut memory: KernelMemory = KernelMemory::Uninit;
 
 #[inline]
-pub fn init() {
+pub fn pre_init() {
     unsafe {
         memory = KernelMemory::Available(arch::kernel_end());
     }

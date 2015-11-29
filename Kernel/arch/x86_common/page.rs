@@ -152,7 +152,7 @@ impl PageTable {
     }
 
     #[inline]
-    pub fn new() -> PageTable {
+    fn new() -> PageTable {
         let pd_ptr = memory::kernel::allocate(PageDirectoryEntry::SIZE, arch::PAGE_SIZE) as *mut PageDirectoryEntry;
         let pt_ptr = memory::kernel::allocate(PageTableEntry::SIZE, arch::PAGE_SIZE) as *mut PageTableEntry;
 
@@ -270,9 +270,15 @@ static mut kernel_pt: PageTable = PageTable {
 };
 
 #[inline]
-pub fn init(pt: PageTable) {
+pub fn pre_init() {
     unsafe {
-        kernel_pt = pt;
+        kernel_pt = PageTable::new();
+    }
+}
+
+#[inline]
+pub fn init() {
+    unsafe {
         kernel_pt.map_range(PageDirectoryEntry::FLAGS_KERNEL, PageTableEntry::FLAGS_KERNEL,
                             arch::kernel_start() .. memory::kernel::kernel_memory(),
                             arch::kernel_start().as_phys_addr() .. memory::kernel::kernel_memory().as_phys_addr());

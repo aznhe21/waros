@@ -80,6 +80,8 @@ pub fn x86_prep_page_table(buf: &mut [u32; 1024 * 16]) {
 #[no_mangle]
 pub fn x86_pre_init() {
     interrupt::pre_init();
+    memory::pre_init();
+    page::pre_init();
 
     log!("WARos: pre boot");
 }

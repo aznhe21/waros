@@ -16,10 +16,12 @@ pub mod slab;
 
 pub const MAX_ADDR: *mut usize = usize::MAX as *mut usize;
 
-fn init_by_frames<F: FnOnce(&mut [buddy::PageFrame])>(len: usize, init_frames: F) {
-    kernel::init();
-    let pt = page::PageTable::new();
+#[inline]
+pub fn pre_init() {
+    kernel::pre_init();
+}
 
+fn init_by_frames<F: FnOnce(&mut [buddy::PageFrame])>(len: usize, init_frames: F) {
     let frames = unsafe {
         slice::from_raw_parts_mut(kernel::allocate(
             mem::size_of::<buddy::PageFrame>() * len,
@@ -31,7 +33,7 @@ fn init_by_frames<F: FnOnce(&mut [buddy::PageFrame])>(len: usize, init_frames: F
     buddy::init_by_frames(frames);
     slab::init();
 
-    page::init(pt);
+    page::init();
 }
 
 pub fn init_by_manual(start: usize, end: usize) {
