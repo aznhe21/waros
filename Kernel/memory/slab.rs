@@ -81,15 +81,16 @@ impl SlabManager {
     }
 
     pub fn reallocate_inplace(&mut self, ptr: *mut u8, size: usize, align: usize) -> usize {
-        panic!("Unimplemented method: SlabManager::reallocate_inplace({:?}, {:?}, {:?})", ptr, size, align)
+        panic!("Unimplemented method: SlabManager::reallocate_inplace({:?}, {:?}, {:?})", ptr, size, align);
     }
 
     pub fn reallocate(&mut self, ptr: *mut u8, size: usize, align: usize) -> *mut u8 {
-        panic!("Unimplemented method: SlabManager::reallocate({:?}, {:?}, {:?})", ptr, size, align)
+        panic!("Unimplemented method: SlabManager::reallocate({:?}, {:?}, {:?})", ptr, size, align);
     }
 
     pub fn free(&mut self, ptr: *mut u8, align: usize) {
-        log!("Unimplemented method: SlabManager::free({:?}, {:?})", ptr, align)
+        log!("Unimplemented method: SlabManager::free({:?}, {:?})", ptr, align);
+        arch::print_backtrace();
     }
 }
 
@@ -281,7 +282,7 @@ impl<T: Sized> SlabAllocator<T> {
                     Some((unsafe { &mut *slab_addr.as_mut_ptr() }, VirtAddr::from_raw(aligned_addr)))
                 }
             })
-        }.map(|(slab, data_addr)| {
+        }.map_or_else(|| panic!("Unable to allocate a kernel object"), |(slab, data_addr)| {
             slab.init(self, data_addr.as_mut_ptr());
             self.free_list.push_back(slab);
             self.total_objects += self.objects_per_slab;

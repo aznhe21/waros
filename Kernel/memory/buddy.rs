@@ -1,12 +1,9 @@
 use rt::{IterHelper, UnsafeOption};
 use arch;
-use arch::multiboot;
 use super::kernel::PhysAddr;
 use lists::LinkedList;
 use core::cmp;
 use core::ptr;
-use core::mem;
-use core::slice;
 use core::usize;
 
 const MAX_ORDER: usize = 11;
@@ -112,7 +109,7 @@ pub struct PageFrame {
 
 impl PageFrame {
     #[inline(always)]
-    fn new(addr: PhysAddr, using: bool) -> PageFrame {
+    pub const fn new(addr: PhysAddr, using: bool) -> PageFrame {
         PageFrame {
             using: using,
             order: 0,
@@ -138,30 +135,7 @@ impl_linked_node!(PageFrame { prev: prev, next: next });
 static mut manager_opt: Option<BuddyManager> = None;
 
 #[inline]
-pub fn init_by_multiboot(mmap: &[multiboot::MemoryMap]) {
-    let len = mmap.iter()
-        .filter(|region| region.type_ == multiboot::MemoryType::Usable)
-        .map(|region| (region.length / arch::FRAME_SIZE as u64) as usize)
-        .sum::<usize>();
-
-    let frames = unsafe {
-        slice::from_raw_parts_mut(super::kernel::allocate(
-            mem::size_of::<PageFrame>() * len,
-            mem::align_of::<PageFrame>()
-        ) as *mut PageFrame, len)
-    };
-
-    let kernel_end = super::kernel::memory_end().as_phys_addr().value();
-
-    let mut i = 0;
-    for region in mmap.iter().filter(|region| region.type_ == multiboot::MemoryType::Usable) {
-        let base_addr_end = region.base_addr + (region.length & !(arch::FRAME_SIZE as u64 - 1));
-        for addr in (region.base_addr .. base_addr_end).step_by(arch::FRAME_SIZE as u64) {
-            frames[i] = PageFrame::new(PhysAddr::from_raw(addr), addr <= kernel_end);
-            i += 1;
-        }
-    }
-
+pub fn init_by_frames(frames: &'static mut [PageFrame]) {
     unsafe {
         manager_opt.into_some().init(frames);
     }
