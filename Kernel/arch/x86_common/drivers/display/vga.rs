@@ -1,6 +1,6 @@
 use rt;
 use arch::x86_io::{inb, outb, outw};
-use super::{Color, DisplaySize, Display};
+use drivers::display::{Color, DisplaySize, Display};
 
 // {{{
 /*const R_COM: u8 = 0x63; // "common" bits

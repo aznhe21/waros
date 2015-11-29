@@ -1,9 +1,9 @@
 #![allow(dead_code)]
 
+use arch::x86_io::outb;
+use drivers::display::{self, DisplaySize, Display};
 use core::mem;
 use core::cmp::max;
-use arch::x86_io::outb;
-use super::{DisplaySize, Display};
 
 const VGA_ADDRESS: *mut u16 = 0xB8000 as *mut u16;
 const VGA_SIZE: (u16, u16) = (80, 25);
@@ -29,24 +29,24 @@ pub enum Color {
 }
 
 impl Color {
-    fn from_common_color(color: super::Color) -> Color {
+    fn from_common_color(color: display::Color) -> Color {
         match color {
-            super::Color::Black      => Color::Black,
-            super::Color::Red        => Color::LightRed,
-            super::Color::Lime       => Color::LightGreen,
-            super::Color::Yellow     => Color::Yellow,
-            super::Color::Blue       => Color::LightBlue,
-            super::Color::Purple     => Color::LightPink,
-            super::Color::Cyan       => Color::LightCyan,
-            super::Color::White      => Color::White,
-            super::Color::Gray       => Color::LightGray,
-            super::Color::DarkRed    => Color::Red,
-            super::Color::Green      => Color::Green,
-            super::Color::DarkYellow => Color::Brown,
-            super::Color::DarkBlue   => Color::Blue,
-            super::Color::DarkPurple => Color::Pink,
-            super::Color::DarkCyan   => Color::Cyan,
-            super::Color::DarkGray   => Color::DarkGray
+            display::Color::Black      => Color::Black,
+            display::Color::Red        => Color::LightRed,
+            display::Color::Lime       => Color::LightGreen,
+            display::Color::Yellow     => Color::Yellow,
+            display::Color::Blue       => Color::LightBlue,
+            display::Color::Purple     => Color::LightPink,
+            display::Color::Cyan       => Color::LightCyan,
+            display::Color::White      => Color::White,
+            display::Color::Gray       => Color::LightGray,
+            display::Color::DarkRed    => Color::Red,
+            display::Color::Green      => Color::Green,
+            display::Color::DarkYellow => Color::Brown,
+            display::Color::DarkBlue   => Color::Blue,
+            display::Color::DarkPurple => Color::Pink,
+            display::Color::DarkCyan   => Color::Cyan,
+            display::Color::DarkGray   => Color::DarkGray
         }
     }
 }
@@ -176,7 +176,7 @@ impl Display for VgaText {
         (VGA_SIZE.0 as DisplaySize, VGA_SIZE.1 as DisplaySize)
     }
 
-    fn put(&self, ccolor: super::Color, x: DisplaySize, y: DisplaySize) {
+    fn put(&self, ccolor: display::Color, x: DisplaySize, y: DisplaySize) {
         let color = Color::from_common_color(ccolor);
         put(x as u16, y as u16, b' ', Color::Black, color);
     }

@@ -2,7 +2,7 @@ use memory;
 use arch::multiboot;
 use arch::page;
 use memory::kernel::PhysAddr;
-use super::{Color, DisplaySize, Display};
+use drivers::display::{Color, DisplaySize, Display};
 use core::mem;
 use core::{u8, u16, u32};
 use core::ops::Range;

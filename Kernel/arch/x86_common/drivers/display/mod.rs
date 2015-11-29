@@ -1,10 +1,6 @@
-pub use self::common::*;
-
+use drivers::display;
 use arch::x86_io::{outb, load_eflags, save_eflags};
 use arch::interrupt;
-
-#[path="../../../common/drivers/display.rs"]
-pub mod common;
 
 pub mod vga_text;
 pub mod vga;
@@ -17,11 +13,11 @@ pub mod bochs;
 
 fn set_rgb_palette() {
     unsafe {
-        set_palette(0, &RGB_TABLE);
+        set_palette(0, &display::RGB_TABLE);
     }
 }
 
-unsafe fn set_palette(start: u8, table: &[RGB]) {
+unsafe fn set_palette(start: u8, table: &[display::RGB]) {
     let eflags = load_eflags();
     interrupt::cli();
     outb(0x03C8, start);

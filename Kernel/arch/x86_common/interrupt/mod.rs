@@ -6,8 +6,6 @@ pub mod pit;
 mod a20;
 pub mod device;
 
-use event;
-
 const GDT_ENTRY_BOOT_CS:  usize = 2;
 const GDT_ENTRY_BOOT_DS:  usize = 3;
 //const GDT_ENTRY_BOOT_TSS: usize = 4;
@@ -76,7 +74,7 @@ pub fn init() {
         idt::init();
         pic::init();
         pit::init();
-        device::init(event::queue());
+        device::init();
 
         sti();
     }

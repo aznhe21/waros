@@ -169,3 +169,30 @@ pub trait Display {
     }
 }
 
+pub struct Dummy;
+
+impl Dummy {
+    #[inline(always)]
+    pub fn new() -> Dummy { Dummy }
+}
+
+impl Display for Dummy {
+    #[inline(always)]
+    fn available() -> bool { false }
+    #[inline(always)]
+    fn log(&self) {}
+    #[inline(always)]
+    fn resolution(&self) -> (DisplaySize, DisplaySize) { (0, 0) }
+    #[inline(always)]
+    fn put(&self, _color: Color, _x: DisplaySize, _y: DisplaySize) {}
+
+    #[inline(always)]
+    fn horizontal_line(&self, _color: Color, _range: Range<DisplaySize>, _y: DisplaySize) {}
+    #[inline(always)]
+    fn fill(&self, _color: Color, _rect: (DisplaySize, DisplaySize, DisplaySize, DisplaySize)) {}
+    #[inline(always)]
+    fn clear(&self, _color: Color) {}
+    #[inline(always)]
+    fn line(&self, _color: Color, _from: (DisplaySize, DisplaySize), _to: (DisplaySize, DisplaySize)) {}
+}
+

@@ -13,7 +13,7 @@
 #![feature(asm)]	//< As a kernel, we need inline assembly
 #![feature(associated_consts, const_fn)]
 #![feature(core_intrinsics)]
-#![feature(zero_one, num_bits_bytes, step_by, ptr_as_ref, iter_arith)]
+#![feature(zero_one, num_bits_bytes, step_by, ptr_as_ref, iter_arith, heap_api)]
 #![feature(unicode, alloc, collections)]
 
 #![no_std]	//< Kernels can't use std
@@ -56,15 +56,19 @@ pub mod event;
 
 pub mod timer;
 
+pub mod drivers;
+
 // Kernel entrypoint
 #[lang="start"]
 #[no_mangle]
 pub fn kmain() -> ! {
     use core::cmp;
     use event::Event;
-    use arch::interrupt::device::Device;
-    use arch::drivers::display::{self, Color, Display, DisplaySize};
+    use drivers::Device;
+    use drivers::display::{Color, Display, DisplaySize};
+    use drivers::keyboard::Keyboard;
 
+    event::init();
     timer::init();
     arch::interrupt::init();
     arch::task::init();
@@ -72,7 +76,7 @@ pub fn kmain() -> ! {
     log!("Total: {} MB Free: {} MB", memory::buddy::manager().total_size() / 1024 / 1024,
         memory::buddy::manager().free_size() / 1024 / 1024);
 
-    let display = display::vbe::Vbe::new();
+    let display = arch::drivers::display::vbe::Vbe::new();
     display.log();
     display.clear(Color::White);
 
@@ -94,14 +98,16 @@ pub fn kmain() -> ! {
         pri_count.1 += 1;
 
         match event::Event::get() {
-            Event::Device(Device::KeyDown(code)) => {
-                log!("Key down: {:02X}", code);
+            Some(Event::Device(Device::Keyboard(Keyboard::Down(state)))) => {
+                log!("Key down: {:02X}", state.code);
             },
-            Event::Device(Device::KeyUp(code)) => {
-                // keyup
-                log!("Key up: {:02X}", code);
+            Some(Event::Device(Device::Keyboard(Keyboard::Press(state)))) => {
+                log!("Key press: {:02X}", state.code);
+            },
+            Some(Event::Device(Device::Keyboard(Keyboard::Up(state)))) => {
+                log!("Key up: {:02X}", state.code);
 
-                match code {
+                match state.code {
                     0x01 => {// Esc
                         display.clear(Color::White);
                     },
@@ -115,24 +121,24 @@ pub fn kmain() -> ! {
                     _ => {}
                 }
             },
-            Event::Device(Device::Mouse(mouse)) => {
+            Some(Event::Device(Device::Mouse(mouse))) => {
                 if clicking {
-                    clicking = mouse.left;
-                } else if mouse.left {
+                    clicking = mouse.left();
+                } else if mouse.left() {
                     clicking = true;
                 }
 
                 let res = display.resolution();
                 let prev_mouse = mouse_pos;
 
-                mouse_pos.0 += mouse.x;
+                mouse_pos.0 += mouse.x as i32;
                 if mouse_pos.0 < 0 {
                     mouse_pos.0 = 0;
                 } else if mouse_pos.0 >= res.0 as i32 {
                     mouse_pos.0 = res.0 as i32 - 1;
                 }
 
-                mouse_pos.1 += mouse.y;
+                mouse_pos.1 += mouse.y as i32;
                 if mouse_pos.1 < 0 {
                     mouse_pos.1 = 0;
                 } else if mouse_pos.1 >= res.1 as i32 {
@@ -157,7 +163,7 @@ pub fn kmain() -> ! {
                     color = 1;
                 }
             },
-            Event::Timer(timer_id) => {
+            Some(Event::Timer(timer_id)) => {
                 match timer_id {
                     _ if timer_id == disp_timer.id() => {
                         log!("Primary: {}, A: {}", pri_count.1.wrapping_sub(pri_count.0),
