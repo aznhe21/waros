@@ -111,7 +111,13 @@ impl TimerEntity {
     pub fn reset(&'static mut self, delay: usize) {
         interrupt::disable();
         let man = manager();
-        self.tick = man.counter() + delay;
+        let counter = man.counter();
+        if counter < self.tick {
+            // リストの最後に移動
+            man.ticking_timers.remove(self);
+        }
+
+        self.tick = counter + delay;
         man.ticking_timers.push(self);
     }
 
