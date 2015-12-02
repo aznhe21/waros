@@ -16,7 +16,7 @@
 // Unstable language features
 #![feature(associated_consts, const_fn, concat_idents)]
 // Unstable library features
-#![feature(core_intrinsics, num_bits_bytes, ptr_as_ref, drop_in_place, heap_api)]
+#![feature(core_intrinsics, zero_one, num_bits_bytes, ptr_as_ref, drop_in_place, heap_api)]
 
 #![cfg_attr(any(target_arch="x86_64", target_arch="x86"), feature(step_by, iter_arith))]
 
