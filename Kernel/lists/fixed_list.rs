@@ -1,6 +1,5 @@
 use core::mem;
 use core::ptr;
-use core::intrinsics;
 use core::ops;
 use core::fmt;
 use core::marker::PhantomData;
@@ -60,7 +59,7 @@ impl<'a, T> FixedList<'a, T> {
 
     pub fn clear(&mut self) {
         for i in 0 .. self.len {
-            unsafe { intrinsics::drop_in_place(&mut self.data[i]) };
+            unsafe { ptr::drop_in_place(&mut self.data[i]) };
         }
 
         self.len = 0;

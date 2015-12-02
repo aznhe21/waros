@@ -2,7 +2,6 @@ use core::ptr;
 use core::iter;
 use core::marker::PhantomData;
 
-#[allow(raw_pointer_derive)]
 #[derive(Clone, Copy)]
 pub struct LinkedList<T: LinkedNode<T>> {
     len: usize,
