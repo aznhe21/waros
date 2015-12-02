@@ -83,6 +83,16 @@ impl ops::DerefMut for Task {
     }
 }
 
+impl PartialEq for Task {
+    #[inline(always)]
+    fn eq(&self, other: &Task) -> bool {
+        self.entity == other.entity
+    }
+}
+
+impl Eq for Task {
+}
+
 pub struct TaskManager {
     tasks: LinkedList<TaskEntity>,
     free_tasks: LinkedList<TaskEntity>,
@@ -172,29 +182,36 @@ impl TaskManager {
         }
     }
 
-    pub fn terminate(&mut self, task: Task) -> ! {
-        interrupt::disable();
-        let next_task = self.forward_task();
-
+    fn remove_task(&mut self, task: &Task) {
         self.tasks.remove(task.entity);
-        if self.tasks.len() == 0 {
-            panic!("There are no tasks");
-        }
+        assert!(self.tasks.len() != 0, "There are no tasks");
         // ここでは解放しない
         self.free_tasks.push_back(task.entity);
 
-        self.reset_timer();
         task.entity().terminate();
+    }
+
+    pub fn terminate(&mut self, task: Task) {
+        interrupt::disable();
+
+        assert!(task != self.current_task());
+        self.remove_task(&task);
+
+        interrupt::enable();
+    }
+
+    fn terminated(&mut self) -> ! {
+        debug_log!("Task terminated");
+
+        interrupt::disable();
+        let cur_task = self.current_task();
+        let next_task = self.forward_task();
+        self.remove_task(&cur_task);
+
+        self.reset_timer();
         unsafe {
             arch::task::leap(next_task.entity());
         }
-    }
-
-    #[inline]
-    fn terminated(&mut self) -> ! {
-        log!("Task terminated");
-        let task = self.current_task();
-        self.terminate(task);
     }
 }
 

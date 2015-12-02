@@ -1,5 +1,8 @@
 .section .text
 .globl flush_gdt
+.globl task_switch
+.globl task_leap
+
 /* extern "C" fn flush_gdt(cs: u16, ds: u16) */
 flush_gdt:
 	pop %edx
@@ -17,10 +20,9 @@ complete_flush:
 	mov %edx, (%esp)
 	ret
 
-.globl task_switch
-/* extern "C" fn task_switch(csp: &mut *mut (), cip: &mut *mut (), nsp: *mut (), nip: *mut ()*/
+/* extern "C" fn task_switch(csp: &mut *mut (), cip: &mut *mut (), nsp: *mut (), nip: *mut ())*/
 task_switch:
-	/* 全スタックを保存(32+4バイト) */
+	/* 全レジスタを保存(32+4バイト) */
 	pusha
 	pushf
 	/* 飛び先をebpに入れる */
@@ -37,8 +39,17 @@ task_switch:
 	sti
 	jmp *%ebp
 restore_stack:
-	/* 全スタックを復元 */
+	/* 全レジスタを復元 */
 	popf
 	popa
 	ret
+
+/* extern "C" fn task_leap(sp: *mut (), ip: *mut ()) */
+task_leap:
+	/* 飛び先をebpに入れる */
+	mov 8(%esp), %ebp
+	/* 新タスクのスタックを復元 */
+	mov 4(%esp), %esp
+	sti
+	jmp *%ebp
 

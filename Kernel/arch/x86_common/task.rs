@@ -1,4 +1,3 @@
-use core::intrinsics;
 use core::ptr;
 use core::usize;
 use collections::Vec;
@@ -9,6 +8,7 @@ pub const TASK_STACK_SIZE: usize = 64 * 1024;
 #[allow(improper_ctypes)]
 extern "C" {
     fn task_switch(csp: &mut *mut (), cip: &mut *mut (), nsp: *mut (), nip: *mut ());
+    fn task_leap(sp: *mut (), ip: *mut ()) -> !;
 }
 
 pub struct TaskEntity {
@@ -50,7 +50,8 @@ impl TaskEntity {
 
     #[inline(always)]
     pub fn terminate(&mut self) {
-        // do nothing
+        self.sp = ptr::null_mut();
+        self.ip = ptr::null_mut();
     }
 }
 
@@ -61,10 +62,6 @@ pub unsafe fn switch(cur_task: &mut TaskEntity, next_task: &mut TaskEntity) {
 
 #[inline]
 pub unsafe fn leap(next_task: &mut TaskEntity) -> ! {
-    asm!("mov $0, %esp
-          sti
-          jmp *$1"
-         :: "r"(next_task.sp), "r"(next_task.ip) :: "volatile");
-    intrinsics::unreachable();
+    task_leap(next_task.sp, next_task.ip);
 }
 
