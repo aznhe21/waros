@@ -6,7 +6,7 @@ ARCH ?= x86
 DEBUG ?= yes
 
 ifeq ($(ARCH),amd64)
-    TRIPLE ?= x86_64-elf-
+    TRIPLE ?= x86_64-none-elf-
 else ifeq ($(ARCH),x86)
     TRIPLE ?= i686-elf-
 else
@@ -50,7 +50,7 @@ LIBALLOC_SYSTEM := $(OBJDIR)liballoc_system.rlib
 LIBALLOC := $(OBJDIR)liballoc.rlib
 LIBRUSTC_UNICODE := $(OBJDIR)librustc_unicode.rlib
 LIBCOLLECTIONS := $(OBJDIR)libcollections.rlib
-OBJS := start.o asm.o kernel.o libcore.rlib liballoc_system.rlib liballoc.rlib librustc_unicode.rlib libcollections.rlib
+OBJS := start.o assembly.o kernel.o libcore.rlib liballoc_system.rlib liballoc.rlib librustc_unicode.rlib libcollections.rlib
 OBJS := $(OBJS:%=$(OBJDIR)%)
 BIN := ../kernel.$(ARCH).bin
 GRUB_DIR := ../grub/
@@ -97,42 +97,44 @@ $(GRUB_ISO): $(BIN) $(GRUB_CFG)
 # Compile libcore from ../libcore/
 $(OBJDIR)libcore.rlib: ../libcore/lib.rs $(TARGETSPEC)
 	@mkdir -p $(dir $@)
-	$(RUSTC) $(RUSTFLAGS) -o $@ --crate-type=lib --emit=link,dep-info $<
+	$(RUSTC) $(RUSTFLAGS) --out-dir $(OBJDIR) --crate-type=lib --emit=link,dep-info $<
 
 # Compile liballoc from ../liballoc/
 $(OBJDIR)liballoc.rlib: ../liballoc/lib.rs $(LIBCORE) $(TARGETSPEC)
 	@mkdir -p $(dir $@)
-	$(RUSTC) $(RUSTFLAGS) -o $@ --crate-type=lib --emit=link,dep-info $< --extern core=$(LIBCORE)
+	$(RUSTC) $(RUSTFLAGS) --out-dir $(OBJDIR) --crate-type=lib --emit=link,dep-info $< --extern core=$(LIBCORE)
 
 # Compile librustc_unicode from ../librustc_unicode/
 $(OBJDIR)librustc_unicode.rlib: ../librustc_unicode/lib.rs $(LIBCORE) $(TARGETSPEC)
 	@mkdir -p $(dir $@)
-	$(RUSTC) $(RUSTFLAGS) -o $@ --crate-type=lib --emit=link,dep-info $< --extern core=$(LIBCORE)
+	$(RUSTC) $(RUSTFLAGS) --out-dir $(OBJDIR) --crate-type=lib --emit=link,dep-info $< --extern core=$(LIBCORE)
 
 # Compile libcollections from ../libcollections/
 $(OBJDIR)libcollections.rlib: ../libcollections/lib.rs $(LIBCORE) $(LIBRUSTC_UNICODE) $(LIBALLOC) $(TARGETSPEC)
 	@mkdir -p $(dir $@)
-	$(RUSTC) $(RUSTFLAGS) -o $@ --crate-type=lib --emit=link,dep-info $< --extern core=$(LIBCORE) --extern rustc_unicode=$(LIBRUSTC_UNICODE) --extern alloc=$(LIBALLOC)
+	$(RUSTC) $(RUSTFLAGS) --out-dir $(OBJDIR) --crate-type=lib --emit=link,dep-info $< --extern core=$(LIBCORE) --extern rustc_unicode=$(LIBRUSTC_UNICODE) --extern alloc=$(LIBALLOC)
 
 # Compile a dummy crate for liballoc
 $(OBJDIR)liballoc_system.rlib: ../AllocSystem/lib.rs $(LIBCORE) $(TARGETSPEC)
 	@mkdir -p $(dir $@)
-	$(RUSTC) $(RUSTFLAGS) -o $@ --crate-type=lib --emit=link,dep-info $<
+	$(RUSTC) $(RUSTFLAGS) --out-dir $(OBJDIR) --crate-type=lib --emit=link,dep-info $<
 
 # Compile rust kernel object
 $(OBJDIR)kernel.o: main.rs $(LIBCORE) $(LIBALLOC_SYSTEM) $(LIBALLOC) $(LIBRUSTC_UNICODE) $(LIBCOLLECTIONS) $(TARGETSPEC)
 	@mkdir -p $(dir $@)
-	$(RUSTC) $(RUSTFLAGS) -o $@ --emit=obj,dep-info $< --extern core=$(LIBCORE) --extern alloc_system=$(LIBALLOC_SYSTEM) --extern alloc=$(LIBALLOC) --extern rustc_unicode=$(LIBRUSTC_UNICODE) --extern collections=$(LIBCOLLECTIONS)
+	$(RUSTC) $(RUSTFLAGS) --out-dir $(OBJDIR) --emit=obj,dep-info $< --extern core=$(LIBCORE) --extern alloc_system=$(LIBALLOC_SYSTEM) --extern alloc=$(LIBALLOC) --extern rustc_unicode=$(LIBRUSTC_UNICODE) --extern collections=$(LIBCOLLECTIONS)
 
-# Compile architecture's assembly stub
+# Compile architecture dependent startup routine
 $(OBJDIR)start.o: arch/$(ARCH)/start.S
 	@mkdir -p $(dir $@)
 	$(AS) $(ASFLAGS) -o $@ $<
 
+include arch/$(ARCH)/assembly.mk
+
 # Compile architecture's assembly stub
-$(OBJDIR)asm.o: arch/$(ARCH)/memory.S arch/$(ARCH)/interrupt/handlers.S arch/$(ARCH)/interrupt/jump.S
+$(OBJDIR)assembly.o: ${ASMS:%=arch/$(ARCH)/%}
 	@mkdir -p $(dir $@)
 	$(AS) $(ASFLAGS) -o $@ $^
 
 # Include dependency files
--include $(OBJDIR)libcore.d $(OBJDIR)liballoc.d $(OBJDIR)kernel.d $(OBJDIR)start.d $(OBJDIR)asm.d
+-include $(OBJDIR)libcore.d $(OBJDIR)liballoc.d $(OBJDIR)librustc_unicode.d $(OBJDIR)libcollections.d $(OBJDIR)liballoc_system.d $(OBJDIR)kernel.d

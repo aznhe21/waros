@@ -8,6 +8,8 @@
  * This code has been put into the public domain, there are no restrictions on
  * its use, and the author takes no liability.
  */
+#![crate_name = "kernel"]
+
 #![feature(no_std)]	//< unwind needs to define lang items
 #![feature(lang_items)]	//< unwind needs to define lang items
 #![feature(asm)]	//< As a kernel, we need inline assembly
