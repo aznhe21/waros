@@ -10,15 +10,17 @@
  */
 #![crate_name = "kernel"]
 
-#![feature(no_std)]	//< unwind needs to define lang items
-#![feature(lang_items)]	//< unwind needs to define lang items
-#![feature(asm)]	//< As a kernel, we need inline assembly
-#![feature(associated_consts, const_fn)]
-#![feature(core_intrinsics)]
-#![feature(zero_one, num_bits_bytes, step_by, ptr_as_ref, iter_arith, heap_api)]
+#![feature(lang_items, no_std, asm)]
+// Crates
 #![feature(unicode, alloc, collections)]
+// Unstable language features
+#![feature(associated_consts, const_fn, concat_idents)]
+// Unstable library features
+#![feature(core_intrinsics, num_bits_bytes, ptr_as_ref, heap_api)]
 
-#![no_std]	//< Kernels can't use std
+#![cfg_attr(any(target_arch="x86_64", target_arch="x86"), feature(step_by, iter_arith))]
+
+#![no_std]
 #![no_builtins]
 
 extern crate rustc_unicode;
