@@ -1,6 +1,7 @@
 .*
 
 /libcore
+/libcore_orig
 /liballoc
 /librustc_unicode
 /libcollections
