@@ -81,6 +81,7 @@ impl<T: LinkedNode<T>> LinkedList<T> {
 
     pub fn push_front(&mut self, node: *mut T) {
         assert!(!node.is_null());
+        debug_assert!(!self.contains(node));
 
         unsafe {
             (*node).set_next(self.head);
@@ -100,6 +101,7 @@ impl<T: LinkedNode<T>> LinkedList<T> {
 
     pub fn push_back(&mut self, node: *mut T) {
         assert!(!node.is_null());
+        debug_assert!(!self.contains(node));
 
         unsafe {
             (*node).set_next(ptr::null_mut());
@@ -119,6 +121,7 @@ impl<T: LinkedNode<T>> LinkedList<T> {
 
     pub fn insert(&mut self, node: *mut T, before: *mut T) {
         assert!(!node.is_null());
+        debug_assert!(!self.contains(node));
 
         unsafe {
             let prev = (*before).get_prev();
@@ -144,6 +147,7 @@ impl<T: LinkedNode<T>> LinkedList<T> {
 
     pub fn pop_front_ptr(&mut self) -> *mut T {
         if self.head.is_null() {
+            debug_assert!(self.tail.is_null() && self.len == 0);
             ptr::null_mut()
         } else {
             let ret = self.head;
@@ -161,6 +165,8 @@ impl<T: LinkedNode<T>> LinkedList<T> {
                 self.len -= 1;
             }
 
+            debug_assert!(self.len == 0 || !self.head.is_null());
+
             ret
         }
     }
@@ -172,6 +178,7 @@ impl<T: LinkedNode<T>> LinkedList<T> {
 
     pub fn pop_back_ptr(&mut self) -> *mut T {
         if self.tail.is_null() {
+            debug_assert!(self.head.is_null() && self.len == 0);
             ptr::null_mut()
         } else {
             let ret = self.tail;
@@ -188,6 +195,8 @@ impl<T: LinkedNode<T>> LinkedList<T> {
 
                 self.len -= 1;
             }
+
+            debug_assert!(self.len == 0 || !self.head.is_null());
 
             ret
         }
@@ -218,6 +227,8 @@ impl<T: LinkedNode<T>> LinkedList<T> {
 
             self.len -= 1;
         }
+
+        debug_assert!(self.len == 0 || !self.head.is_null());
     }
 
     pub fn contains(&self, node: *mut T) -> bool {
