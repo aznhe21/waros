@@ -97,7 +97,7 @@ pub struct TaskManager {
     tasks: LinkedList<TaskEntity>,
     free_tasks: LinkedList<TaskEntity>,
     current_task: *mut TaskEntity,
-    timer: *mut timer::TimerEntity,
+    timer: timer::UnmanagedTimer,
     slab: &'static mut slab::SlabAllocator<TaskEntity>
 }
 
@@ -107,7 +107,7 @@ impl TaskManager {
             tasks: LinkedList::new(),
             free_tasks: LinkedList::new(),
             current_task: ptr::null_mut(),
-            timer: unsafe { timer::manager().by_callback(TaskManager::switch_by_timer).entity() },
+            timer: unsafe { timer::UnmanagedTimer::with_callback(TaskManager::switch_by_timer) },
             slab: memory::check_oom_opt(slab::SlabAllocator::new("Task", mem::align_of::<Task>(), None))
         };
 
@@ -135,9 +135,7 @@ impl TaskManager {
 
     #[inline]
     pub fn reset_timer(&mut self) {
-        unsafe {
-            (*self.timer).reset(arch::task::TASK_SWITCH_INTERVAL);
-        }
+        self.timer.reset(arch::task::TASK_SWITCH_INTERVAL);
     }
 
     fn switch_by_timer(_: timer::TimerId) {

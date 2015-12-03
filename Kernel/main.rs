@@ -94,7 +94,7 @@ pub fn kmain() -> ! {
 
     task::manager().add(task_a, &(&mut a_count.1 as *mut usize));
 
-    let disp_timer = timer::manager().by_queue(event::queue());
+    let disp_timer = timer::Timer::with_queue(event::queue());
     disp_timer.reset(1000);
 
     //arch::interrupt::wait();

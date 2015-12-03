@@ -4,7 +4,6 @@ use lists::{LinkedList, SortedList};
 use event::{Event, EventQueue};
 use core::cmp::Ordering;
 use core::iter::FromIterator;
-use core::mem;
 use core::ptr;
 use core::intrinsics;
 
@@ -32,20 +31,10 @@ impl TimerManager {
         self.counter = 0;
     }
 
-    fn by_handler(&mut self, handler: TimerHandler) -> Timer {
+    fn with_handler(&mut self, handler: TimerHandler) -> TimerId {
         let timer = self.free_timers.pop_front().expect("Not enough timers");
         timer.handler = handler;
-        Timer(timer.id)
-    }
-
-    #[inline]
-    pub fn by_queue(&mut self, queue: &'static mut EventQueue) -> Timer {
-        self.by_handler(TimerHandler::Queue(queue))
-    }
-
-    #[inline]
-    pub fn by_callback(&mut self, callback: fn(TimerId) -> ()) -> Timer {
-        self.by_handler(TimerHandler::Callback(callback))
+        timer.id
     }
 
     fn remove(&mut self, timer: &'static mut TimerEntity) {
@@ -86,7 +75,7 @@ impl TimerManager {
     }
 }
 
-pub struct TimerEntity {
+struct TimerEntity {
     id: TimerId,
     handler: TimerHandler,
     tick: usize,
@@ -129,22 +118,24 @@ impl TimerEntity {
 pub struct Timer(TimerId);
 
 impl Timer {
-    unsafe fn own_entity(&self) -> &'static mut TimerEntity {
+    #[inline]
+    pub fn with_queue(queue: &'static mut EventQueue) -> Timer {
+        Timer(manager().with_handler(TimerHandler::Queue(queue)))
+    }
+
+    #[inline]
+    pub fn with_callback(callback: fn(TimerId) -> ()) -> Timer {
+        Timer(manager().with_handler(TimerHandler::Callback(callback)))
+    }
+
+    #[inline]
+    fn entity(&self) -> &'static mut TimerEntity {
         &mut manager().timer_pool[self.0 as usize]
     }
 
     #[inline]
-    pub unsafe fn entity(self) -> &'static mut TimerEntity {
-        let entity = self.own_entity();
-        mem::forget(self);
-        entity
-    }
-
-    #[inline]
     pub fn reset(&self, delay: usize) {
-        unsafe {
-            self.own_entity().reset(delay);
-        }
+        self.entity().reset(delay);
     }
 
     #[inline(always)]
@@ -156,7 +147,48 @@ impl Timer {
 impl Drop for Timer {
     #[inline]
     fn drop(&mut self) {
-        manager().remove(unsafe { self.own_entity() });
+        manager().remove(self.entity());
+    }
+}
+
+pub struct UnmanagedTimer(TimerId);
+
+impl UnmanagedTimer {
+    #[inline]
+    pub unsafe fn with_queue(queue: &'static mut EventQueue) -> UnmanagedTimer {
+        UnmanagedTimer(manager().with_handler(TimerHandler::Queue(queue)))
+    }
+
+    #[inline]
+    pub unsafe fn with_callback(callback: fn(TimerId) -> ()) -> UnmanagedTimer {
+        UnmanagedTimer(manager().with_handler(TimerHandler::Callback(callback)))
+    }
+
+    #[inline]
+    fn entity(&self) -> &'static mut TimerEntity {
+        &mut manager().timer_pool[self.0 as usize]
+    }
+
+    #[inline]
+    pub fn reset(&self, delay: usize) {
+        self.entity().reset(delay);
+    }
+
+    #[inline(always)]
+    pub fn id(&self) -> TimerId {
+        self.0
+    }
+
+    #[inline]
+    pub fn drop(&self) {
+        manager().remove(self.entity());
+    }
+}
+
+impl Clone for UnmanagedTimer {
+    #[inline]
+    fn clone(&self) -> UnmanagedTimer {
+        UnmanagedTimer(self.0)
     }
 }
 
