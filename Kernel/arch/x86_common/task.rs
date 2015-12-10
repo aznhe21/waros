@@ -1,3 +1,5 @@
+use task;
+use timer;
 use core::ptr;
 use core::usize;
 use collections::Vec;
@@ -13,6 +15,9 @@ extern "C" {
 
 pub struct TaskEntity {
     pub id: usize,
+    pub timer: timer::UnmanagedTimer,
+    pub state: task::State,
+    pub priority: task::Priority,
     stack: Vec<usize>,
     sp: *mut (),
     ip: *mut (),
@@ -45,7 +50,7 @@ impl TaskEntity {
 
     #[inline(always)]
     pub fn setup_primary(&mut self) {
-        // do nothing
+        // 現在のタスクなので値はどうでもいい
     }
 
     #[inline(always)]
