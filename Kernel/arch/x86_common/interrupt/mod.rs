@@ -54,6 +54,40 @@ pub extern "C" fn disable() {
     }
 }
 
+pub extern "C" fn stop() -> usize {
+    unsafe {
+        let ret: usize;
+        asm!("pushf
+              pop   $0
+              cli" : "=r"(ret) ::: "volatile");
+        ret & (1 << 9)
+    }
+}
+
+#[cfg(target_arch="x86")]
+pub extern "C" fn restore(state: usize) {
+    unsafe {
+        asm!("pushf
+              pop    %eax
+              andl   $$(~(1<<9)), %eax
+              orl    $0, %eax
+              push   %eax
+              popf" :: "r"(state) : "eax" : "volatile");
+    }
+}
+
+#[cfg(target_arch="x86_64")]
+pub extern "C" fn restore(state: usize) {
+    unsafe {
+        asm!("pushf
+              pop    %rax
+              andl   $$(~(1<<9)), %rax
+              orl    $0, %rax
+              push   %rax
+              popf" :: "r"(state) : "rax" : "volatile");
+    }
+}
+
 #[inline(always)]
 pub fn pre_init() {
     unsafe {

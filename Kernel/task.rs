@@ -1,4 +1,4 @@
-use rt::UnsafeOption;
+use rt::{UnsafeOption, IntBlocker};
 use arch;
 use arch::interrupt;
 use arch::task::TaskEntity;
@@ -180,7 +180,7 @@ pub struct TaskManager {
 
 impl TaskManager {
     fn init(&mut self) {
-        interrupt::disable();
+        let _blocker = IntBlocker::new();
 
         unsafe {
             *self = TaskManager {
@@ -208,7 +208,6 @@ impl TaskManager {
         self.add(yield_task, &()).set_priority(Priority::Idle);
 
         self.reset_timer();
-        interrupt::enable();
     }
 
     fn init_task(entity: &mut TaskEntity, id: usize) {
@@ -258,7 +257,8 @@ impl TaskManager {
     }
 
     fn set_priority(&mut self, task: &Task, priority: Priority) {
-        interrupt::disable();
+        let _blocker = IntBlocker::new();
+
         let entity = task.entity();
         match entity.state {
             State::Runnable => {
@@ -375,12 +375,10 @@ impl TaskManager {
     }
 
     pub fn terminate(&mut self, task: Task) {
-        interrupt::disable();
+        let _blocker = IntBlocker::new();
 
         assert!(!task.is_running());
         self.remove_task(&task);
-
-        interrupt::enable();
     }
 
     fn terminated(&mut self) -> ! {
