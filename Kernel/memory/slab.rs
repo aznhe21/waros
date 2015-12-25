@@ -1,4 +1,4 @@
-use rt::{self, IterHelper, UnsafeOption};
+use rt::{self, IterHelper, Force, ForceRef};
 use arch;
 use lists::{LinkedList, LinkedNode};
 use memory::kernel::VirtAddr;
@@ -33,9 +33,12 @@ pub struct SlabManager {
     generic_allocators: [SlabAllocator<u8>; 17]
 }
 
+unsafe impl Send for SlabManager { }
+unsafe impl Sync for SlabManager { }
+
 impl SlabManager {
     #[inline]
-    fn init(&'static mut self) {
+    fn init(&mut self) {
         self.list = LinkedList::new();
         let size = mem::size_of::<SlabAllocator<SlabAllocator<()>>>();
         let align = mem::align_of::<SlabAllocator<SlabAllocator<()>>>();
@@ -169,14 +172,13 @@ impl<T: Sized> SlabAllocator<T> {
     }
 
     pub fn new(name: &'static str, align: usize, ctor: Option<fn(&mut T) -> ()>) -> Option<&'static mut Self> {
-        let manager = manager();
-        unsafe { manager.allocator.allocate().as_mut() }.and_then(move |allocator_obj| {
+        unsafe { manager().allocator.allocate().as_mut() }.and_then(move |allocator_obj| {
             let allocator: &'static mut Self = unsafe { mem::transmute(allocator_obj) };
             if allocator.init(name, align, ctor, mem::size_of::<T>()) {
-                manager.add(allocator);
+                manager().add(allocator);
                 Some(allocator)
             } else {
-                manager.allocator.free(unsafe { mem::transmute(allocator) });
+                manager().allocator.free(unsafe { mem::transmute(allocator) });
                 None
             }
         })
@@ -221,7 +223,7 @@ impl<T: Sized> SlabAllocator<T> {
         }
     }
 
-    pub fn free(&'static mut self, ptr: *mut T) {
+    pub fn free(&mut self, ptr: *mut T) {
         match self.partial_list.iter_mut().find(|slab| slab.matches(self, ptr)) {
             Some(slab) => {
                 if slab.free(self, ptr) == self.objects_per_slab {
@@ -248,7 +250,7 @@ impl<T: Sized> SlabAllocator<T> {
         let slab_order = usize::BITS - ((self.slab_size / arch::FRAME_SIZE).leading_zeros() - 1) as usize;
 
         if self.is_off_slab() {
-            let manager = manager();
+            let mut manager = manager();
             let size = mem::size_of::<Slab<T>>() + mem::size_of::<Bufctl>() * self.objects_per_slab;
             let align = mem::align_of::<Slab<T>>();
             let ptr = manager.allocate(size, align);
@@ -396,19 +398,15 @@ impl<T> Slab<T> {
     }
 }
 
-static mut manager_opt: Option<SlabManager> = None;
+static MANAGER: Force<SlabManager> = Force::new();
 
 #[inline]
 pub fn init() {
-    unsafe {
-        manager_opt.into_some().init();
-    }
+    MANAGER.setup().init();
 }
 
-#[inline]
-pub fn manager() -> &'static mut SlabManager {
-    unsafe {
-        manager_opt.as_mut().be_some()
-    }
+#[inline(always)]
+pub fn manager() -> ForceRef<SlabManager> {
+    MANAGER.as_ref()
 }
 

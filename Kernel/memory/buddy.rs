@@ -1,4 +1,4 @@
-use rt::{IterHelper, UnsafeOption};
+use rt::{IterHelper, Force, ForceRef};
 use arch;
 use super::kernel::PhysAddr;
 use lists::LinkedList;
@@ -12,6 +12,9 @@ pub struct BuddyManager {
     frames: &'static mut [PageFrame],
     orders: [LinkedList<PageFrame>; MAX_ORDER]
 }
+
+unsafe impl Send for BuddyManager { }
+unsafe impl Sync for BuddyManager { }
 
 impl BuddyManager {
     #[inline(always)]
@@ -132,19 +135,15 @@ impl PageFrame {
 
 impl_linked_node!(PageFrame { prev: prev, next: next });
 
-static mut manager_opt: Option<BuddyManager> = None;
+static MANAGER: Force<BuddyManager> = Force::new();
 
 #[inline]
 pub fn init_by_frames(frames: &'static mut [PageFrame]) {
-    unsafe {
-        manager_opt.into_some().init(frames);
-    }
+    MANAGER.setup().init(frames);
 }
 
-#[inline]
-pub fn manager() -> &'static mut BuddyManager {
-    unsafe {
-        manager_opt.as_mut().be_some()
-    }
+#[inline(always)]
+pub fn manager() -> ForceRef<BuddyManager> {
+    MANAGER.as_ref()
 }
 

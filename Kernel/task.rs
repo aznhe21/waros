@@ -1,4 +1,4 @@
-use rt::{UnsafeOption, IntBlocker};
+use rt::{Force, ForceRef, IntBlocker};
 use arch;
 use arch::interrupt;
 use arch::task::TaskEntity;
@@ -177,6 +177,9 @@ pub struct TaskManager {
     timer: timer::UnmanagedTimer,
     slab: &'static mut slab::SlabAllocator<TaskEntity>
 }
+
+unsafe impl Send for TaskManager { }
+unsafe impl Sync for TaskManager { }
 
 impl TaskManager {
     fn init(&mut self) {
@@ -396,20 +399,16 @@ impl TaskManager {
     }
 }
 
-static mut manager_opt: Option<TaskManager> = None;
+static MANAGER: Force<TaskManager> = Force::new();
 
 #[inline]
 pub fn init() {
-    unsafe {
-        manager_opt.into_some().init();
-    }
+    MANAGER.setup().init();
 }
 
-#[inline]
-pub fn manager() -> &'static mut TaskManager {
-    unsafe {
-        manager_opt.as_mut().be_some()
-    }
+#[inline(always)]
+pub fn manager() -> ForceRef<TaskManager> {
+    MANAGER.as_ref()
 }
 
 fn task_terminated() -> ! {

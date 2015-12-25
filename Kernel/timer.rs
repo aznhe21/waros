@@ -1,16 +1,17 @@
-use rt::UnsafeOption;
-use arch::interrupt;
+use rt::{Force, ForceRef, IntBlocker};
 use lists::{LinkedList, SortedList};
 use event::{Event, EventQueue};
 use core::cmp::Ordering;
 use core::iter::FromIterator;
+use core::mem;
 use core::ptr;
 use core::intrinsics;
 
 pub type TimerId = u16;
 
 pub enum TimerHandler {
-    Queue(*mut EventQueue),
+    Unset,
+    Queue(ForceRef<EventQueue>),
     Callback(fn(TimerId) -> ())
 }
 
@@ -21,8 +22,12 @@ pub struct TimerManager {
     counter: usize
 }
 
+unsafe impl Send for TimerManager { }
+unsafe impl Sync for TimerManager { }
+
 impl TimerManager {
-    pub fn init(&'static mut self) {
+    #[inline(always)]
+    pub fn init(&mut self) {
         for (i, timer) in self.timer_pool.iter_mut().enumerate() {
             *timer = TimerEntity::new(i as TimerId);
         }
@@ -46,7 +51,7 @@ impl TimerManager {
 
     pub fn tick(&mut self, count: usize) {
         unsafe {
-            self.counter = intrinsics::overflowing_add(self.counter, count);
+            self.counter = self.counter.wrapping_add(count);
             let mut callbacks = LinkedList::new();
 
             loop {
@@ -56,7 +61,8 @@ impl TimerManager {
                 }
                 self.ticking_timers.remove(timer_ptr);
                 match (*timer_ptr).handler {
-                    TimerHandler::Queue(queue) => (*queue).push(Event::Timer((*timer_ptr).id)),
+                    TimerHandler::Unset => unreachable!(),
+                    TimerHandler::Queue(ref mut queue) => queue.push(Event::Timer((*timer_ptr).id)),
                     TimerHandler::Callback(_) => callbacks.push_back(timer_ptr)
                 }
             }
@@ -90,7 +96,7 @@ impl TimerEntity {
     fn new(id: TimerId) -> TimerEntity {
         TimerEntity {
             id: id,
-            handler: TimerHandler::Queue(ptr::null_mut()),
+            handler: TimerHandler::Unset,
             tick: 0,
             prev: ptr::null_mut(),
             next: ptr::null_mut()
@@ -98,8 +104,9 @@ impl TimerEntity {
     }
 
     pub fn reset(&'static mut self, delay: usize) {
-        interrupt::disable();
-        let man = manager();
+        let _blocker = IntBlocker::new();
+
+        let mut man = manager();
         let counter = man.counter();
         if counter < self.tick {
             // リストの最後に移動
@@ -119,7 +126,7 @@ pub struct Timer(TimerId);
 
 impl Timer {
     #[inline]
-    pub fn with_queue(queue: &'static mut EventQueue) -> Timer {
+    pub fn with_queue(queue: ForceRef<EventQueue>) -> Timer {
         Timer(manager().with_handler(TimerHandler::Queue(queue)))
     }
 
@@ -130,7 +137,9 @@ impl Timer {
 
     #[inline]
     fn entity(&self) -> &'static mut TimerEntity {
-        &mut manager().timer_pool[self.0 as usize]
+        unsafe {
+            mem::transmute(&mut manager().timer_pool[self.0 as usize])
+        }
     }
 
     #[inline]
@@ -155,7 +164,7 @@ pub struct UnmanagedTimer(TimerId);
 
 impl UnmanagedTimer {
     #[inline]
-    pub unsafe fn with_queue(queue: &'static mut EventQueue) -> UnmanagedTimer {
+    pub unsafe fn with_queue(queue: ForceRef<EventQueue>) -> UnmanagedTimer {
         UnmanagedTimer(manager().with_handler(TimerHandler::Queue(queue)))
     }
 
@@ -166,7 +175,9 @@ impl UnmanagedTimer {
 
     #[inline]
     fn entity(&self) -> &'static mut TimerEntity {
-        &mut manager().timer_pool[self.0 as usize]
+        unsafe {
+            mem::transmute(&mut manager().timer_pool[self.0 as usize])
+        }
     }
 
     #[inline]
@@ -192,19 +203,15 @@ impl Clone for UnmanagedTimer {
     }
 }
 
-static mut manager_opt: Option<TimerManager> = None;
+static MANAGER: Force<TimerManager> = Force::new();
 
 #[inline]
 pub fn init() {
-    unsafe {
-        manager_opt.into_some().init();
-    }
+    MANAGER.setup().init();
 }
 
-#[inline]
-pub fn manager() -> &'static mut TimerManager {
-    unsafe {
-        manager_opt.as_mut().be_some()
-    }
+#[inline(always)]
+pub fn manager() -> ForceRef<TimerManager> {
+    MANAGER.as_ref()
 }
 
