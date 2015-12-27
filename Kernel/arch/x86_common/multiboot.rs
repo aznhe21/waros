@@ -28,7 +28,7 @@ extern {
 }
 
 #[inline(always)]
-pub fn magic_valid() -> bool {
+pub fn is_magic_valid() -> bool {
     mboot_sig == MULTIBOOT_BOOTLOADER_MAGIC
 }
 
@@ -39,7 +39,7 @@ pub fn info() -> &'static MultibootInfo {
 
 #[inline]
 pub fn init() {
-    assert!(magic_valid(), "Invalid multiboot magic");
+    assert!(is_magic_valid(), "Invalid multiboot magic");
 
     let info = unsafe {
         mboot_ptr = (mboot_ptr as *mut u8).offset(arch::KERNEL_BASE as isize) as *mut MultibootInfo;
@@ -255,7 +255,7 @@ impl VbeControllerInfo {
     const MAGIC: u32 = 0x41534556; // 'VESA'
 
     #[inline(always)]
-    pub fn valid(&self) -> bool {
+    pub fn is_valid(&self) -> bool {
         self.signature == VbeControllerInfo::MAGIC
     }
 

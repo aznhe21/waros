@@ -114,8 +114,8 @@ macro_rules! delegate {
 }
 
 impl Display for Vbe {
-    fn available() -> bool {
-        multiboot::info().vbe_controller_info().map_or(false, |cinfo| cinfo.valid() && cinfo.version >= 0x0102)
+    fn is_available() -> bool {
+        multiboot::info().vbe_controller_info().map_or(false, |cinfo| cinfo.is_valid() && cinfo.version >= 0x0102)
     }
 
     fn log(&self) {

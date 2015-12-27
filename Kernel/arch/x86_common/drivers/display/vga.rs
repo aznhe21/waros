@@ -1257,7 +1257,7 @@ impl Vga {
 }
 
 impl Display for Vga {
-    fn available() -> bool { true }
+    fn is_available() -> bool { true }
 
     fn resolution(&self) -> (DisplaySize, DisplaySize) {
         (self.width, self.height)

@@ -46,14 +46,14 @@ unsafe fn read_reg(index: u16) -> u16 {
 //static mut vram: *mut u8 = ptr::null_mut();
 
 #[inline(always)]
-pub fn available() -> bool {
+pub fn is_available() -> bool {
     unsafe { read_reg(VBE_DISPI_INDEX_ID) & 0xFFF0 == VBE_DISPI_ID0 }
 }
 
 /*#[inline(always)]
 fn configure(width: u16, height: u16, depth: u16, use_lfb: bool, clear_memory: bool) -> *mut u8 {
     unsafe {
-        /*if !available() {
+        /*if !is_available() {
             panic!("Bochs not available");
         }
 
@@ -106,7 +106,7 @@ impl Bochs {
 }
 
 impl Display for Bochs {
-    fn available() -> bool { available() }
+    fn is_available() -> bool { is_available() }
 
     fn resolution(&self) -> (DisplaySize, DisplaySize) {
         (self.width, self.height)

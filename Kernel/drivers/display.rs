@@ -115,7 +115,7 @@ impl Color {
 pub type DisplaySize = i32;
 
 pub trait Display {
-    fn available() -> bool;
+    fn is_available() -> bool;
 
     fn log(&self) {
         let (width, height) = self.resolution();
@@ -178,7 +178,7 @@ impl Dummy {
 
 impl Display for Dummy {
     #[inline(always)]
-    fn available() -> bool { false }
+    fn is_available() -> bool { false }
     #[inline(always)]
     fn log(&self) {}
     #[inline(always)]

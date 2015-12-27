@@ -170,7 +170,7 @@ impl VgaText {
 }
 
 impl Display for VgaText {
-    fn available() -> bool { true }
+    fn is_available() -> bool { true }
 
     fn resolution(&self) -> (DisplaySize, DisplaySize) {
         (VGA_SIZE.0 as DisplaySize, VGA_SIZE.1 as DisplaySize)
