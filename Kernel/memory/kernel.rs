@@ -1,6 +1,8 @@
 use rt;
 use arch;
+use core::mem;
 use core::fmt;
+use core::ptr::{self, Unique};
 use core::ops::{Add, Sub};
 
 #[derive(Clone, Copy, PartialEq, PartialOrd)]
@@ -178,17 +180,27 @@ pub fn memory_end() -> VirtAddr {
     }
 }
 
-#[inline]
-pub fn allocate(size: usize, align: usize) -> *mut u8 {
-    unsafe {
-        if let KernelMemory::Available(VirtAddr(old_addr)) = memory {
-            let addr = rt::align_up(old_addr, align);
+pub unsafe fn allocate_raw(size: usize, align: usize) -> *mut u8 {
+    if let KernelMemory::Available(VirtAddr(old_addr)) = memory {
+        let addr = rt::align_up(old_addr, align);
 
-            memory = KernelMemory::Available(VirtAddr::from_raw(addr + size));
-            addr as *mut u8
-        } else {
-            panic!("Unable to allocate after kernel space");
-        }
+        memory = KernelMemory::Available(VirtAddr::from_raw(addr + size));
+        addr as *mut u8
+    } else {
+        panic!("Unable to allocate after kernel space");
+    }
+}
+
+pub unsafe fn allocate_uninit<T>() -> Unique<T> {
+    Unique::new(allocate_raw(mem::size_of::<T>(), mem::align_of::<T>()) as *mut T)
+}
+
+#[inline]
+pub fn allocate<T>(x: T) -> Unique<T> {
+    unsafe {
+        let p = allocate_uninit();
+        ptr::write(*p, x);
+        p
     }
 }
 

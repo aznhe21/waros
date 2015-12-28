@@ -23,7 +23,7 @@ pub fn pre_init() {
 
 fn init_by_frames<F: FnOnce(&mut [buddy::PageFrame])>(len: usize, init_frames: F) {
     let frames = unsafe {
-        slice::from_raw_parts_mut(kernel::allocate(
+        slice::from_raw_parts_mut(kernel::allocate_raw(
             mem::size_of::<buddy::PageFrame>() * len,
             mem::align_of::<buddy::PageFrame>()
         ) as *mut buddy::PageFrame, len)

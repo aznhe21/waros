@@ -3,8 +3,8 @@ use arch;
 use super::kernel::PhysAddr;
 use lists::LinkedList;
 use core::cmp;
-use core::ptr;
 use core::usize;
+use core::ptr::{self, Unique};
 
 const MAX_ORDER: usize = 11;
 
@@ -42,7 +42,7 @@ impl BuddyManager {
         }
     }
 
-    pub fn allocate(&mut self, order: usize) -> Option<&'static mut PageFrame> {
+    pub fn allocate(&mut self, order: usize) -> Option<Unique<PageFrame>> {
         assert!(order < MAX_ORDER);
         self.orders[order..]
             .iter_mut()
@@ -58,34 +58,35 @@ impl BuddyManager {
 
                 frame.using = true;
                 frame.order = order;
-                frame
+                unsafe {
+                    Unique::new(frame)
+                }
             })
     }
 
-    pub fn free(&mut self, frame: &'static mut PageFrame) {
-        assert!(frame.using);
+    pub fn free(&mut self, frame: Unique<PageFrame>) {
+        unsafe {
+            assert!((**frame).using);
 
-        let frame_ptr = frame as *const PageFrame;
-        let mut top_index = self.frames
-            .iter()
-            .position(|f| f as *const _ == frame_ptr)
-            .expect("Invalid page frame");
-        let mut order = frame.order;
+            let mut top_index = self.frames
+                .iter()
+                .position(|f| f as *const _ == *frame)
+                .expect("Invalid page frame");
+            let mut order = (**frame).order;
 
-        while order < MAX_ORDER {
-            let count = 1 << order;
-            let buddy = unsafe { &mut *self.frames.as_mut_ptr().offset((top_index ^ count) as isize) };
+            while order < MAX_ORDER {
+                let count = 1 << order;
+                let buddy = self.frames.as_mut_ptr().offset((top_index ^ count) as isize);
 
-            if buddy.using || buddy.order != order {
-                break;
+                if (*buddy).using || (*buddy).order != order {
+                    break;
+                }
+
+                self.orders[order].remove(buddy);
+                top_index &= !count;
+                order += 1;
             }
 
-            self.orders[order].remove(buddy);
-            top_index &= !count;
-            order += 1;
-        }
-
-        unsafe {
             let top = self.frames.as_mut_ptr().offset(top_index as isize);
             (*top).using = false;
             (*top).order = order;

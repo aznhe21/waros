@@ -6,8 +6,8 @@ use lists::{LinkedList, LinkedNode};
 use memory::{self, slab};
 use timer;
 use core::mem;
-use core::ptr;
-use core::ops;
+use core::ptr::{self, Shared};
+use core::ops::{Deref, DerefMut};
 use core::sync::atomic::{Ordering, AtomicUsize};
 
 /*
@@ -81,27 +81,29 @@ impl Priority {
 }
 
 pub struct Task {
-    entity: *mut TaskEntity
+    entity: Shared<TaskEntity>
 }
 
 impl Task {
     pub const DEFAULT_PRIORITY: Priority = Priority::Middle;
 
     #[inline(always)]
-    const fn from_entity(entity: *mut TaskEntity) -> Task {
-        Task { entity: entity }
+    fn from_entity(entity: *mut TaskEntity) -> Task {
+        unsafe {
+            Task { entity: Shared::new(entity) }
+        }
     }
 
     #[inline(always)]
     fn entity(&self) -> &mut TaskEntity {
         unsafe {
-            &mut *self.entity
+            &mut **self.entity
         }
     }
 
     #[inline]
     pub fn this() -> Task {
-        Task::from_entity(manager().running_task)
+        Task::from_entity(*manager().running_task)
     }
 
     #[inline]
@@ -142,7 +144,7 @@ impl Task {
     }
 }
 
-impl ops::Deref for Task {
+impl Deref for Task {
     type Target = TaskEntity;
 
     #[inline(always)]
@@ -151,7 +153,7 @@ impl ops::Deref for Task {
     }
 }
 
-impl ops::DerefMut for Task {
+impl DerefMut for Task {
     #[inline(always)]
     fn deref_mut(&mut self) -> &mut TaskEntity {
         self.entity()
@@ -161,18 +163,17 @@ impl ops::DerefMut for Task {
 impl PartialEq for Task {
     #[inline(always)]
     fn eq(&self, other: &Task) -> bool {
-        self.entity == other.entity
+        *self.entity == *other.entity
     }
 }
 
-impl Eq for Task {
-}
+impl Eq for Task { }
 
 pub struct TaskManager {
     runnable_tasks: [LinkedList<TaskEntity>; PRIORITY_LEN],
     suspended_tasks: LinkedList<TaskEntity>,
     free_tasks: LinkedList<TaskEntity>,
-    running_task: *mut TaskEntity,
+    running_task: Shared<TaskEntity>,
     current_priority: Priority,
     timer: timer::UnmanagedTimer,
     slab: &'static mut slab::SlabAllocator<TaskEntity>
@@ -182,41 +183,45 @@ unsafe impl Send for TaskManager { }
 unsafe impl Sync for TaskManager { }
 
 impl TaskManager {
+    #[inline(always)]
     fn init(&mut self) {
-        let _blocker = IntBlocker::new();
-
         unsafe {
-            *self = TaskManager {
+            let _blocker = IntBlocker::new();
+
+            let slab = memory::check_oom_opt(slab::SlabAllocator::new("Task", mem::align_of::<Task>(), None));
+            let primary_task = Shared::new(memory::check_oom(slab.allocate_uninit()));
+            TaskManager::init_task(primary_task, 0);
+            (**primary_task).setup_primary();
+
+            ptr::write(self, TaskManager {
                 runnable_tasks: mem::uninitialized(),
                 suspended_tasks: LinkedList::new(),
                 free_tasks: LinkedList::new(),
-                running_task: ptr::null_mut(),
+                running_task: primary_task,
                 current_priority: Task::DEFAULT_PRIORITY,
                 timer: timer::UnmanagedTimer::with_callback(TaskManager::switch_by_timer),
-                slab: memory::check_oom_opt(slab::SlabAllocator::new("Task", mem::align_of::<Task>(), None))
-            };
+                slab: slab
+            });
+
+            for list in self.runnable_tasks.iter_mut() {
+                *list = LinkedList::new();
+            }
+
+            self.runnable_tasks[(**primary_task).priority as usize].push_back(*primary_task);
+
+            // CPU返還タスク
+            self.add(yield_task, &()).set_priority(Priority::Idle);
+
+            self.reset_timer();
         }
-
-        for list in self.runnable_tasks.iter_mut() {
-            *list = LinkedList::new();
-        }
-
-        let primary_task = memory::check_oom(self.slab.allocate());
-        TaskManager::init_task(primary_task, 0);
-        primary_task.setup_primary();
-        self.running_task = primary_task;
-        self.runnable_tasks[primary_task.priority as usize].push_back(primary_task);
-
-        // CPU返還タスク
-        self.add(yield_task, &()).set_priority(Priority::Idle);
-
-        self.reset_timer();
     }
 
-    fn init_task(entity: &mut TaskEntity, id: usize) {
-        entity.id = id;
-        entity.priority = Task::DEFAULT_PRIORITY;
-        entity.timer = unsafe { timer::UnmanagedTimer::with_callback(TaskManager::resume_by_timer) };
+    fn init_task(entity: Shared<TaskEntity>, id: usize) {
+        unsafe {
+            (**entity).id = id;
+            (**entity).priority = Task::DEFAULT_PRIORITY;
+            (**entity).timer = timer::UnmanagedTimer::with_callback(TaskManager::resume_by_timer);
+        }
     }
 
     // 実行可能状態タスクのある最も高い優先度を返す
@@ -230,10 +235,12 @@ impl TaskManager {
 
     pub fn add<T>(&mut self, entry: extern "C" fn(arg: &T), arg: &T) -> Task {
         let task = self.free_tasks.pop_front().unwrap_or_else(|| {
-            let task = memory::check_oom(self.slab.allocate());
-            TaskManager::init_task(task, task_counter.fetch_add(1, Ordering::SeqCst));
-            task.inplace_new();
-            task
+            unsafe {
+                let task = Shared::new(memory::check_oom(self.slab.allocate_uninit()));
+                TaskManager::init_task(task, task_counter.fetch_add(1, Ordering::SeqCst));
+                (**task).inplace_new();
+                &mut **task
+            }
         });
         task.priority = Task::DEFAULT_PRIORITY;
         task.state = State::Runnable;
@@ -319,14 +326,14 @@ impl TaskManager {
 
     #[inline]
     fn running_task(&mut self) -> Task {
-        Task::from_entity(self.running_task)
+        Task::from_entity(*self.running_task)
     }
 
     #[inline]
     fn forward_task(&mut self) -> Task {
         unsafe {
             // 次のタスクか最初のタスク
-            let next = match (*self.running_task).get_next() {
+            let next = match (**self.running_task).get_next() {
                 next if !next.is_null() => next,
                 _ => {
                     self.current_priority = self.highest_priority();
@@ -335,10 +342,10 @@ impl TaskManager {
             };
 
             debug_assert!(!next.is_null());
-            debug_assert!(self.running_task != next);
-            self.running_task = next;
+            debug_assert!(*self.running_task != next);
+            self.running_task = Shared::new(next);
 
-            Task::from_entity(self.running_task)
+            Task::from_entity(*self.running_task)
         }
     }
 

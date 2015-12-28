@@ -153,21 +153,23 @@ impl PageTable {
 
     #[inline]
     fn new() -> PageTable {
-        let pd_ptr = memory::kernel::allocate(PageDirectoryEntry::SIZE, arch::PAGE_SIZE) as *mut PageDirectoryEntry;
-        let pt_ptr = memory::kernel::allocate(PageTableEntry::SIZE, arch::PAGE_SIZE) as *mut PageTableEntry;
-
-        let base_addr = VirtAddr::from_mut_ptr(pt_ptr).as_phys_addr().value() as u32 >> 12;
-
         unsafe {
+            let pd_ptr = memory::kernel::allocate_raw(PageDirectoryEntry::SIZE, arch::PAGE_SIZE) as
+                *mut PageDirectoryEntry;
+            let pt_ptr = memory::kernel::allocate_raw(PageTableEntry::SIZE, arch::PAGE_SIZE) as
+                *mut PageTableEntry;
+
+            let base_addr = VirtAddr::from_mut_ptr(pt_ptr).as_phys_addr().value() as u32 >> 12;
+
             for i in 0 .. PageDirectoryEntry::LEN {
                 *pd_ptr.offset(i as isize) = PageDirectoryEntry::from_4kb_aligned(base_addr + i as u32);
             }
             memory::fill32(pt_ptr as *mut u32, 0, PageTableEntry::LEN * PageDirectoryEntry::LEN / u32::BYTES);
-        }
 
-        PageTable {
-            pd: pd_ptr,
-            pt: pt_ptr
+            PageTable {
+                pd: pd_ptr,
+                pt: pt_ptr
+            }
         }
     }
 

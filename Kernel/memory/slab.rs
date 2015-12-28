@@ -5,9 +5,9 @@ use memory::kernel::VirtAddr;
 use core::cmp;
 use core::fmt;
 use core::mem;
-use core::ptr;
 use core::slice;
 use core::usize;
+use core::ptr::{self, Unique};
 
 const MAX_ORDER: usize = 13;
 const MAX_OBJECT_SIZE: usize = arch::FRAME_SIZE;
@@ -37,7 +37,7 @@ unsafe impl Send for SlabManager { }
 unsafe impl Sync for SlabManager { }
 
 impl SlabManager {
-    #[inline]
+    #[inline(always)]
     fn init(&mut self) {
         self.list = LinkedList::new();
         let size = mem::size_of::<SlabAllocator<SlabAllocator<()>>>();
@@ -69,13 +69,13 @@ impl SlabManager {
         let alloc_size = rt::align_up(size, align);
         self.generic_allocators.iter_mut()
             .find_map(|allocator| if allocator.object_size >= alloc_size {
-                let ptr = allocator.allocate();
-                if !ptr.is_null() {
-                    unsafe {
+                unsafe {
+                    let ptr = allocator.allocate_uninit();
+                    if !ptr.is_null() {
                         Some(ptr.offset((alloc_size - size) as isize))
+                    } else {
+                        None
                     }
-                } else {
-                    None
                 }
             } else {
                 None
@@ -172,7 +172,7 @@ impl<T: Sized> SlabAllocator<T> {
     }
 
     pub fn new(name: &'static str, align: usize, ctor: Option<fn(&mut T) -> ()>) -> Option<&'static mut Self> {
-        unsafe { manager().allocator.allocate().as_mut() }.and_then(move |allocator_obj| {
+        unsafe { manager().allocator.allocate_uninit().as_mut() }.and_then(move |allocator_obj| {
             let allocator: &'static mut Self = unsafe { mem::transmute(allocator_obj) };
             if allocator.init(name, align, ctor, mem::size_of::<T>()) {
                 manager().add(allocator);
@@ -189,8 +189,7 @@ impl<T: Sized> SlabAllocator<T> {
         self.name
     }
 
-    #[inline]
-    pub fn allocate(&mut self) -> *mut T {
+    pub unsafe fn allocate_uninit(&mut self) -> *mut T {
         match self.partial_list.front_mut() {
             Some(slab) => {
                 let ptr = slab.allocate(self);
@@ -223,6 +222,18 @@ impl<T: Sized> SlabAllocator<T> {
         }
     }
 
+    pub fn allocate(&mut self, x: T) -> Option<Unique<T>> {
+        unsafe {
+            let p = self.allocate_uninit();
+            if p.is_null() {
+                None
+            } else {
+                ptr::write(p, x);
+                Some(Unique::new(p))
+            }
+        }
+    }
+
     pub fn free(&mut self, ptr: *mut T) {
         match self.partial_list.iter_mut().find(|slab| slab.matches(self, ptr)) {
             Some(slab) => {
@@ -246,18 +257,20 @@ impl<T: Sized> SlabAllocator<T> {
             .any(|slab| slab.matches(self, ptr))
     }*/
 
-    fn grow(&mut self) {
+    unsafe fn grow(&mut self) {
         let slab_order = usize::BITS - ((self.slab_size / arch::FRAME_SIZE).leading_zeros() - 1) as usize;
+        let slab_size = mem::size_of::<Slab<T>>() + mem::size_of::<Bufctl>() * self.objects_per_slab;
 
         if self.is_off_slab() {
             let mut manager = manager();
-            let size = mem::size_of::<Slab<T>>() + mem::size_of::<Bufctl>() * self.objects_per_slab;
             let align = mem::align_of::<Slab<T>>();
-            let ptr = manager.allocate(size, align);
-            unsafe { (ptr as *mut Slab<T>).as_mut() }.and_then(|slab| {
+            let slab = manager.allocate(slab_size, align) as *mut Slab<T>;
+            if slab.is_null() {
+                None
+            } else {
                 match super::buddy::manager().allocate(slab_order) {
                     Some(page) => {
-                        let data_addr = arch::page::table().map_memory(3, 3, page.addr(), self.slab_size);
+                        let data_addr = arch::page::table().map_memory(3, 3, (**page).addr(), self.slab_size);
                         if data_addr.is_null() {
                             super::buddy::manager().free(page);
                             None
@@ -266,31 +279,30 @@ impl<T: Sized> SlabAllocator<T> {
                         }
                     },
                     None => {
-                        manager.free(ptr, align);
+                        manager.free(slab as *mut u8, align);
                         None
                     }
                 }
-            })
+            }
         } else {
             super::buddy::manager().allocate(slab_order).and_then(|page| {
-                let bufctl_size = mem::size_of::<Bufctl>();
-                let slab_addr = arch::page::table().map_memory(3, 3, page.addr(), self.slab_size);
+                let slab_addr = arch::page::table().map_memory(3, 3, (**page).addr(), self.slab_size);
                 if slab_addr.is_null() {
                     super::buddy::manager().free(page);
                     None
                 } else {
-                    let data_addr = slab_addr + mem::size_of::<Slab<T>>() + bufctl_size * self.objects_per_slab;
+                    let data_addr = slab_addr + slab_size;
                     let aligned_addr = rt::align_up(data_addr.value(), self.align);
-                    Some((unsafe { &mut *slab_addr.as_mut_ptr() }, VirtAddr::from_raw(aligned_addr)))
+                    Some((slab_addr.as_mut_ptr(), VirtAddr::from_raw(aligned_addr)))
                 }
             })
         }.map_or_else(|| panic!("Unable to allocate a kernel object"), |(slab, data_addr)| {
-            slab.init(self, data_addr.as_mut_ptr());
+            (*slab).init(self, data_addr.as_mut_ptr());
             self.free_list.push_back(slab);
             self.total_objects += self.objects_per_slab;
 
             if let Some(ctor) = self.ctor {
-                let objects = unsafe { slice::from_raw_parts_mut(data_addr.as_mut_ptr(), self.objects_per_slab) };
+                let objects = slice::from_raw_parts_mut(data_addr.as_mut_ptr(), self.objects_per_slab);
                 for obj in objects {
                     ctor(obj);
                 }

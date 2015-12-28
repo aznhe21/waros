@@ -1,4 +1,5 @@
 use core::cell::UnsafeCell;
+use core::ptr::Shared;
 use core::fmt::{self, Display, Debug};
 use core::cmp::Ordering;
 use core::hash::{Hash, Hasher};
@@ -6,7 +7,7 @@ use core::ops::{Deref, DerefMut};
 
 /// You must feel the Force around you. Here, between you, me, the tree, the rock, everywhere!
 pub struct Force<T>(UnsafeCell<Option<T>>);
-pub struct ForceRef<T>(*mut T);
+pub struct ForceRef<T>(Shared<T>);
 
 impl<T> Force<T> {
     #[inline(always)]
@@ -23,7 +24,9 @@ impl<T> Force<T> {
 
     #[inline(always)]
     pub fn as_ref(&self) -> ForceRef<T> {
-        ForceRef(self.0.get() as *mut T)
+        unsafe {
+            ForceRef(Shared::new(self.0.get() as *mut T))
+        }
     }
 }
 
@@ -136,7 +139,7 @@ impl<T> Deref for ForceRef<T> {
     #[inline(always)]
     fn deref(&self) -> &T {
         unsafe {
-            &*self.0
+            &**self.0
         }
     }
 }
@@ -145,7 +148,7 @@ impl<T> DerefMut for ForceRef<T> {
     #[inline(always)]
     fn deref_mut(&mut self) -> &mut T {
         unsafe {
-            &mut *self.0
+            &mut **self.0
         }
     }
 }

@@ -1,11 +1,10 @@
 use rt::{Force, ForceRef, IntBlocker};
 use lists::{LinkedList, SortedList};
 use event::{Event, EventQueue};
+use core::intrinsics;
 use core::cmp::Ordering;
 use core::iter::FromIterator;
-use core::mem;
-use core::ptr;
-use core::intrinsics;
+use core::ptr::{self, Shared};
 
 pub type TimerId = u16;
 
@@ -42,11 +41,11 @@ impl TimerManager {
         timer.id
     }
 
-    fn remove(&mut self, timer: &'static mut TimerEntity) {
-        if self.ticking_timers.contains(timer) {
-            self.ticking_timers.remove(timer);
+    fn remove(&mut self, timer: Shared<TimerEntity>) {
+        if self.ticking_timers.contains(*timer) {
+            self.ticking_timers.remove(*timer);
         }
-        self.free_timers.push_back(timer);
+        self.free_timers.push_back(*timer);
     }
 
     pub fn tick(&mut self, count: usize) {
@@ -103,18 +102,32 @@ impl TimerEntity {
         }
     }
 
-    pub fn reset(&'static mut self, delay: usize) {
-        let _blocker = IntBlocker::new();
+    pub fn reset(this: Shared<TimerEntity>, delay: usize) {
+        unsafe {
+            let _blocker = IntBlocker::new();
 
-        let mut man = manager();
-        let counter = man.counter();
-        if counter < self.tick {
-            // リストの最後に移動
-            man.ticking_timers.remove(self);
+            let mut man = manager();
+            let counter = man.counter();
+            if counter < (**this).tick {
+                // リストの最後に移動
+                man.ticking_timers.remove(*this);
+            }
+
+            (**this).tick = counter + delay;
+            man.ticking_timers.push(*this);
         }
+    }
 
-        self.tick = counter + delay;
-        man.ticking_timers.push(self);
+    pub fn clear(this: Shared<TimerEntity>) {
+        unsafe {
+            let _blocker = IntBlocker::new();
+
+            let mut man = manager();
+            if man.ticking_timers.contains(*this) {
+                man.ticking_timers.remove(*this);
+            }
+            (**this).tick = 0;
+        }
     }
 
     fn cmp(a: &TimerEntity, b: &TimerEntity) -> Ordering {
@@ -136,20 +149,25 @@ impl Timer {
     }
 
     #[inline]
-    fn entity(&self) -> &'static mut TimerEntity {
+    fn entity(&self) -> Shared<TimerEntity> {
         unsafe {
-            mem::transmute(&mut manager().timer_pool[self.0 as usize])
+            Shared::new(&mut manager().timer_pool[self.0 as usize])
         }
-    }
-
-    #[inline]
-    pub fn reset(&self, delay: usize) {
-        self.entity().reset(delay);
     }
 
     #[inline(always)]
     pub fn id(&self) -> TimerId {
         self.0
+    }
+
+    #[inline(always)]
+    pub fn reset(&self, delay: usize) {
+        TimerEntity::reset(self.entity(), delay);
+    }
+
+    #[inline(always)]
+    pub fn clear(&self) {
+        TimerEntity::clear(self.entity());
     }
 }
 
@@ -174,20 +192,25 @@ impl UnmanagedTimer {
     }
 
     #[inline]
-    fn entity(&self) -> &'static mut TimerEntity {
+    fn entity(&self) -> Shared<TimerEntity> {
         unsafe {
-            mem::transmute(&mut manager().timer_pool[self.0 as usize])
+            Shared::new(&mut manager().timer_pool[self.0 as usize])
         }
-    }
-
-    #[inline]
-    pub fn reset(&self, delay: usize) {
-        self.entity().reset(delay);
     }
 
     #[inline(always)]
     pub fn id(&self) -> TimerId {
         self.0
+    }
+
+    #[inline(always)]
+    pub fn reset(&self, delay: usize) {
+        TimerEntity::reset(self.entity(), delay);
+    }
+
+    #[inline(always)]
+    pub fn clear(&self) {
+        TimerEntity::clear(self.entity());
     }
 
     #[inline]
