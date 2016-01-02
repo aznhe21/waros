@@ -1,6 +1,6 @@
 pub use self::fixed_queue::FixedQueue;
 pub use self::fixed_list::FixedList;
-pub use self::linked_list::{LinkedList, LinkedNode};
+pub use self::linked_list::{Linker, LinkedNode, LinkedList};
 pub use self::sorted_list::SortedList;
 
 #[macro_use]

@@ -1,14 +1,14 @@
-use super::linked_list::{LinkedList, LinkedNode, IterMut};
+use super::linked_list::{Linker, LinkedNode, LinkedList, Iter};
 use core::cmp::Ordering::{self, Less};
 
-pub struct SortedList<T: LinkedNode<T>> {
+pub struct SortedList<T: LinkedNode> {
     inner_list: LinkedList<T>,
     compare: fn(&T, &T) -> Ordering
 }
 
-impl<T: LinkedNode<T>> SortedList<T> {
+impl<T: LinkedNode> SortedList<T> where T::Linker: Linker<Node=T> {
     #[inline]
-    pub const fn new(compare: fn(&T, &T) -> Ordering) -> SortedList<T> {
+    pub fn new(compare: fn(&T, &T) -> Ordering) -> SortedList<T> {
         SortedList {
             inner_list: LinkedList::new(),
             compare: compare
@@ -16,8 +16,8 @@ impl<T: LinkedNode<T>> SortedList<T> {
     }
 
     #[inline]
-    pub fn iter_mut(&mut self) -> IterMut<T> {
-        self.inner_list.iter_mut()
+    pub fn iter(&self) -> Iter<T> {
+        self.inner_list.iter()
     }
 
     #[inline]
@@ -36,70 +36,47 @@ impl<T: LinkedNode<T>> SortedList<T> {
     }
 
     #[inline]
-    pub fn front_mut<'a>(&mut self) -> Option<&'a mut T> {
-        self.inner_list.front_mut()
+    pub fn front(&mut self) -> Option<T::Linker> {
+        self.inner_list.front()
     }
 
     #[inline]
-    pub fn front_ptr(&mut self) -> *mut T {
-        self.inner_list.front_ptr()
+    pub fn back(&mut self) -> Option<T::Linker> {
+        self.inner_list.back()
     }
 
-    #[inline]
-    pub fn back_mut<'a>(&mut self) -> Option<&'a mut T> {
-        self.inner_list.back_mut()
-    }
-
-    #[inline]
-    pub fn back_ptr(&mut self) -> *mut T {
-        self.inner_list.back_ptr()
-    }
-
-    pub fn push(&mut self, node: *mut T) {
-        assert!(!node.is_null());
-
-        unsafe {
-            let mut cand = self.inner_list.front_ptr();
-            // while node >= cand
-            while !cand.is_null() && (self.compare)(&*node, &*cand) != Less {
-                cand = (*cand).get_next();
+    pub fn push(&mut self, node: T::Linker) {
+        let mut next = self.inner_list.front();
+        while let Some(cand) = next.take() {
+            // if node < cand
+            if (self.compare)(node.as_ref(), cand.as_ref()) == Less {
+                self.inner_list.insert(node, cand);
+                return;
             }
 
-            if !cand.is_null() {
-                self.inner_list.insert(node, cand)
-            } else {
-                self.inner_list.push_back(node)
-            }
+            next = cand.as_ref().get_next();
         }
+
+        self.inner_list.push_back(node);
     }
 
     #[inline]
-    pub fn pop_front<'a>(&mut self) -> Option<&'a mut T> {
+    pub fn pop_front(&mut self) -> Option<T::Linker> {
         self.inner_list.pop_front()
     }
 
     #[inline]
-    pub fn pop_front_ptr(&mut self) -> *mut T {
-        self.inner_list.pop_front_ptr()
-    }
-
-    #[inline]
-    pub fn pop_back<'a>(&mut self) -> Option<&'a mut T> {
+    pub fn pop_back(&mut self) -> Option<T::Linker> {
         self.inner_list.pop_back()
     }
 
     #[inline]
-    pub fn pop_back_ptr(&mut self) -> *mut T {
-        self.inner_list.pop_back_ptr()
-    }
-
-    #[inline]
-    pub fn remove(&mut self, node: *mut T) {
+    pub fn remove(&mut self, node: &T::Linker) {
         self.inner_list.remove(node)
     }
 
     #[inline]
-    pub fn contains(&self, node: *mut T) -> bool {
+    pub fn contains(&self, node: &T::Linker) -> bool {
         self.inner_list.contains(node)
     }
 }

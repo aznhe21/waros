@@ -1,268 +1,303 @@
-use core::ptr;
-use core::iter;
-use core::marker::PhantomData;
+use core::ptr::Shared;
+use core::iter::FromIterator;
 
-#[derive(Clone, Copy)]
-pub struct LinkedList<T: LinkedNode<T>> {
+/// 同一性の比較及び内部に保持する`LinkedNode`の取り出しに使うトレイト。
+pub trait Linker: Clone {
+    /// この`Linker`が保持するノードの型。
+    type Node: LinkedNode;
+
+    /// 同一性を比較する。
+    ///
+    /// 値による比較ではなく、参照での比較を行う。
+    fn is_same(&self, other: &Self) -> bool;
+
+    /// 保持するノードを参照で返す。
+    fn as_ref(&self) -> &Self::Node;
+
+    /// 保持するノードをミュータブル参照で返す。
+    fn as_mut(&mut self) -> &mut Self::Node;
+}
+
+#[inline(always)]
+fn linker_is_same_option<This: Linker>(this: Option<&This>, other: Option<&This>) -> bool {
+    match (this, other) {
+        (Some(this), Some(other)) => this.is_same(other),
+        _ => false
+    }
+}
+
+/// ノードそのものを表すトレイト。
+///
+/// 前のノードや次のノードの参照に使う。
+pub trait LinkedNode {
+    /// この`LinkedNode`を保持する、`Shared`などの型。
+    type Linker: Linker;
+
+    /// 前のノードを返す。
+    fn get_prev(&self) -> Option<Self::Linker>;
+
+    /// 前のノードを設定する。
+    fn set_prev(&mut self, Option<Self::Linker>);
+
+    /// 次のノードを返す。
+    fn get_next(&self) -> Option<Self::Linker>;
+
+    /// 次のノードを設定する。
+    fn set_next(&mut self, Option<Self::Linker>);
+}
+
+/// メモリ確保を伴わない双方向リンクリスト。
+pub struct LinkedList<T: LinkedNode> {
     len: usize,
-    head: *mut T,
-    tail: *mut T
+    head: Option<T::Linker>,
+    tail: Option<T::Linker>
 }
 
-pub trait LinkedNode<T> {
-    fn get_prev(&self) -> *mut T;
-    fn set_prev(&mut self, node: *mut T);
-
-    fn get_next(&self) -> *mut T;
-    fn set_next(&mut self, *mut T);
+/// `LinkedList`に`IntoIterator`を実装するイテレータ。
+pub struct IntoIter<T: LinkedNode> {
+    list: LinkedList<T>
 }
 
-pub struct IterMut<'a, T: 'a + LinkedNode<T>> {
+/// `LinkedList`のイテレータ。
+pub struct Iter<T: LinkedNode> {
     len: usize,
-    head: *mut T,
-    tail: *mut T,
-    _marker: PhantomData<&'a mut T>
+    head: Option<T::Linker>,
+    tail: Option<T::Linker>
 }
 
-impl<T: LinkedNode<T>> LinkedList<T> {
+impl<T: LinkedNode> LinkedList<T> where T::Linker: Linker<Node=T> {
+    /// 空の`LinkedList`を作る。
     #[inline]
     pub const fn new() -> LinkedList<T> {
         LinkedList {
             len: 0,
-            head: ptr::null_mut(),
-            tail: ptr::null_mut()
+            head: None,
+            tail: None
         }
     }
 
+    /// 前進イテレータを提供する。
     #[inline]
-    pub fn iter_mut<'a>(&self) -> IterMut<'a, T> {
-        IterMut {
+    pub fn iter(&self) -> Iter<T> {
+        Iter {
             len: self.len,
-            head: self.head,
-            tail: self.tail,
-            _marker: PhantomData
+            head: self.head.clone(),
+            tail: self.tail.clone()
         }
     }
 
+    /// このリストの長さを返す。
+    ///
+    /// この操作はO(1)で完了する。
     #[inline]
     pub fn len(&self) -> usize {
         self.len
     }
 
+    /// このリストが空ならば`true`を返す。
+    ///
+    /// この操作はO(1)で完了する。
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.len == 0
     }
 
+    /// このリストを空にする。
+    ///
+    /// この操作はO(1)で完了する。
     #[inline]
     pub fn clear(&mut self) {
         *self = Self::new();
     }
 
+    /// 先頭の要素の`Linker`を返す。リストが空ならば`None`を返す。
     #[inline]
-    pub fn front_mut<'a>(&mut self) -> Option<&'a mut T> {
-        unsafe { self.front_ptr().as_mut() }
+    pub fn front(&self) -> Option<T::Linker> {
+        self.head.clone()
     }
 
+    /// 末尾の要素の`Linker`を返す。リストが空ならば`None`を返す。
     #[inline]
-    pub fn front_ptr(&mut self) -> *mut T {
-        self.head
+    pub fn back(&self) -> Option<T::Linker> {
+        self.tail.clone()
     }
 
-    #[inline]
-    pub fn back_mut<'a>(&mut self) -> Option<&'a mut T> {
-        unsafe { self.back_ptr().as_mut() }
-    }
+    /// リストの先頭に要素を挿入する。
+    ///
+    /// この操作はO(1)で完了する。ただし、デバッグ時はこの限りでない。
+    pub fn push_front(&mut self, mut node: T::Linker) {
+        debug_assert!(!self.contains(&node));
 
-    #[inline]
-    pub fn back_ptr(&mut self) -> *mut T {
-        self.tail
-    }
+        node.as_mut().set_next(self.head.clone());
+        node.as_mut().set_prev(None);
 
-    pub fn push_front(&mut self, node: *mut T) {
-        assert!(!node.is_null());
-        debug_assert!(!self.contains(node));
-
-        unsafe {
-            (*node).set_next(self.head);
-            (*node).set_prev(ptr::null_mut());
-
-            if !self.head.is_null() {
-                (*self.head).set_prev(node);
+        match self.head {
+            Some(ref mut head) => {
+                head.as_mut().set_prev(Some(node.clone()));
                 self.len += 1;
-            } else {
-                self.tail = node;
+            },
+            None => {
+                self.tail = Some(node.clone());
                 self.len = 1;
             }
-
-            self.head = node;
         }
+
+        self.head = Some(node);
     }
 
-    pub fn push_back(&mut self, node: *mut T) {
-        assert!(!node.is_null());
-        debug_assert!(!self.contains(node));
+    /// リストの末尾に要素を挿入する。
+    ///
+    /// この操作はO(1)で完了する。ただし、デバッグ時はこの限りでない。
+    pub fn push_back(&mut self, mut node: T::Linker) {
+        debug_assert!(!self.contains(&node));
 
-        unsafe {
-            (*node).set_next(ptr::null_mut());
-            (*node).set_prev(self.tail);
+        node.as_mut().set_next(None);
+        node.as_mut().set_prev(self.tail.clone());
 
-            if !self.tail.is_null() {
-                (*self.tail).set_next(node);
+        match self.tail {
+            Some(ref mut tail) => {
+                tail.as_mut().set_next(Some(node.clone()));
                 self.len += 1;
-            } else {
-                self.head = node;
+            }
+            None => {
+                self.head = Some(node.clone());
                 self.len = 1;
             }
-
-            self.tail = node;
         }
+
+        self.tail = Some(node);
     }
 
-    pub fn insert(&mut self, node: *mut T, before: *mut T) {
-        assert!(!node.is_null());
-        debug_assert!(!self.contains(node));
+    /// `before`の後ろに要素を挿入する。
+    ///
+    /// この操作はO(1)で完了する。ただし、デバッグ時はこの限りでない。
+    pub fn insert(&mut self, mut node: T::Linker, mut before: T::Linker) {
+        debug_assert!(!self.contains(&node));
+        debug_assert!(self.contains(&before));
 
-        unsafe {
-            let prev = (*before).get_prev();
-            (*node).set_next(before);
-            (*node).set_prev(prev);
-            (*before).set_prev(node);
-            if !prev.is_null() {
-                (*prev).set_next(node);
-            }
-
-            if self.head == before {
-                self.head = node;
-            }
-
-            self.len += 1;
+        // nodeに前後を設定
+        let mut prev = before.as_mut().get_prev();
+        node.as_mut().set_next(Some(before.clone()));
+        node.as_mut().set_prev(prev.clone());
+        if let Some(ref mut prev) = prev {
+            prev.as_mut().set_next(Some(node.clone()));
         }
+        before.as_mut().set_prev(Some(node.clone()));
+
+        // 先頭を更新
+        if linker_is_same_option(self.head.as_ref(), Some(&before)) {
+            self.head = Some(node);
+        }
+
+        self.len += 1;
     }
 
-    #[inline]
-    pub fn pop_front<'a>(&mut self) -> Option<&'a mut T> {
-        unsafe { self.pop_front_ptr().as_mut() }
-    }
+    /// 先頭の要素を削除して返す。リストが空ならば`None`を返す。
+    ///
+    /// この操作はO(1)で完了する。
+    pub fn pop_front(&mut self) -> Option<T::Linker> {
+        debug_assert!(self.head.is_some() || (self.tail.is_none() && self.len == 0));
 
-    pub fn pop_front_ptr(&mut self) -> *mut T {
-        if self.head.is_null() {
-            debug_assert!(self.tail.is_null() && self.len == 0);
-            ptr::null_mut()
-        } else {
-            let ret = self.head;
-
-            if self.head == self.tail {
-                self.head = ptr::null_mut();
-                self.tail = ptr::null_mut();
-                self.len = 0;
-            } else {
-                unsafe {
-                    self.head = (*ret).get_next();
-                    (*self.head).set_prev(ptr::null_mut());
+        match self.head.take() {
+            Some(val) => {
+                if linker_is_same_option(self.tail.as_ref(), Some(&val)) {
+                    self.tail = None;
+                    self.len = 0;
+                } else {
+                    self.head = val.as_ref().get_next();
+                    self.head.as_mut().unwrap().as_mut().set_prev(None);
+                    self.len -= 1;
                 }
 
-                self.len -= 1;
-            }
-
-            debug_assert!(self.len == 0 || !self.head.is_null());
-
-            ret
+                Some(val)
+            },
+            None => None
         }
     }
 
-    #[inline]
-    pub fn pop_back<'a>(&mut self) -> Option<&'a mut T> {
-        unsafe { self.pop_back_ptr().as_mut() }
-    }
+    /// 末尾の要素を削除して返す。リストが空ならば`None`を返す。
+    ///
+    /// この操作はO(1)で完了する。
+    pub fn pop_back(&mut self) -> Option<T::Linker> {
+        debug_assert!(self.tail.is_some() || (self.head.is_none() && self.len == 0));
 
-    pub fn pop_back_ptr(&mut self) -> *mut T {
-        if self.tail.is_null() {
-            debug_assert!(self.head.is_null() && self.len == 0);
-            ptr::null_mut()
-        } else {
-            let ret = self.tail;
-
-            if self.head == self.tail {
-                self.head = ptr::null_mut();
-                self.tail = ptr::null_mut();
-                self.len = 0;
-            } else {
-                unsafe {
-                    self.tail = (*ret).get_prev();
-                    (*self.tail).set_next(ptr::null_mut());
+        match self.tail.take() {
+            Some(val) => {
+                if linker_is_same_option(self.head.as_ref(), Some(&val)) {
+                    self.head = None;
+                    self.len = 0;
+                } else {
+                    self.tail = val.as_ref().get_prev();
+                    self.tail.as_mut().unwrap().as_mut().set_next(None);
+                    self.len -= 1;
                 }
 
-                self.len -= 1;
-            }
-
-            debug_assert!(self.len == 0 || !self.head.is_null());
-
-            ret
+                Some(val)
+            },
+            None => None
         }
     }
 
-    pub fn remove(&mut self, node: *mut T) {
-        assert!(!node.is_null());
+    /// 指定した要素と同じ要素を削除する。
+    ///
+    /// この操作はO(1)で完了する。ただし、デバッグ時はこの限りでない。
+    pub fn remove(&mut self, node: &T::Linker) {
         debug_assert!(self.contains(node));
 
-        unsafe {
-            let next = (*node).get_next();
-            let prev = (*node).get_prev();
+        let mut next = node.as_ref().get_next();
+        let mut prev = node.as_ref().get_prev();
 
-            if !next.is_null() {
-                (*next).set_prev(prev);
-            }
-            if !prev.is_null() {
-                (*prev).set_next(next);
-            }
-
-            if self.head == node {
-                self.head = next;
-            }
-
-            if self.tail == node {
-                self.tail = prev;
-            }
-
-            self.len -= 1;
+        // nodeの前後を更新
+        if let Some(ref mut next) = next {
+            next.as_mut().set_prev(prev.clone());
+        }
+        if let Some(ref mut prev) = prev {
+            prev.as_mut().set_next(next.clone());
         }
 
-        debug_assert!(self.len == 0 || !self.head.is_null());
+        // 先頭/末尾を更新
+        if linker_is_same_option(self.head.as_ref(), Some(&node)) {
+            self.head = next.clone();
+        }
+
+        if linker_is_same_option(self.tail.as_ref(), Some(&node)) {
+            self.tail = prev.clone();
+        }
+
+        self.len -= 1;
+
+        debug_assert!(self.head.is_some() || self.len == 0);
     }
 
-    pub fn contains(&self, node: *mut T) -> bool {
-        unsafe {
-            let mut ptr = self.head;
-            while !ptr.is_null() {
-                if ptr == node {
-                    return true;
-                }
-                ptr = (*ptr).get_next();
+    /// 指定した要素がこのリストに含まれているならば`true`を返す。
+    pub fn contains(&self, node: &T::Linker) -> bool {
+        let mut ptr = self.head.clone();
+        while let Some(ref val) = ptr.take() {
+            if val.is_same(node) {
+                return true;
             }
-            false
+            ptr = val.as_ref().get_next();
         }
+        false
     }
 }
 
-impl<'a, T: 'a + LinkedNode<T>> iter::FromIterator<&'a mut T> for LinkedList<T> {
-    fn from_iter<I: IntoIterator<Item=&'a mut T>>(iterable: I) -> LinkedList<T> {
+impl<T: LinkedNode> FromIterator<T::Linker> for LinkedList<T> where T::Linker: Linker<Node=T> {
+    fn from_iter<I: IntoIterator<Item=T::Linker>>(iterable: I) -> LinkedList<T> {
         let mut iter = iterable.into_iter();
-        if let Some(head) = iter.next() {
-            let head_ptr = head as *mut T;
-
-            head.set_prev(ptr::null_mut());
-            let (len, tail) = iter.fold((1, head), |(len, prev), next| {
-                prev.set_next(next);
-                next.set_prev(prev);
+        if let Some(mut head) = iter.next() {
+            head.as_mut().set_prev(None);
+            let (len, mut tail) = iter.fold((1, head.clone()), |(len, mut prev), mut next| {
+                prev.as_mut().set_next(Some(next.clone()));
+                next.as_mut().set_prev(Some(prev.clone()));
                 (len + 1, next)
             });
-            tail.set_next(ptr::null_mut());
+            tail.as_mut().set_next(None);
 
             LinkedList {
                 len: len,
-                head: head_ptr,
-                tail: tail as *mut T
+                head: Some(head),
+                tail: Some(tail)
             }
         } else {
             LinkedList::new()
@@ -270,47 +305,123 @@ impl<'a, T: 'a + LinkedNode<T>> iter::FromIterator<&'a mut T> for LinkedList<T> 
     }
 }
 
-impl<'a, T: 'a + LinkedNode<T>> Iterator for IterMut<'a, T> {
-    type Item = &'a mut T;
+impl<T: LinkedNode> IntoIterator for LinkedList<T> where T::Linker: Linker<Node=T> {
+    type Item = T::Linker;
+    type IntoIter = IntoIter<T>;
 
-    #[inline]
-    fn next(&mut self) -> Option<&'a mut T> {
+    #[inline(always)]
+    fn into_iter(self) -> IntoIter<T> {
+        IntoIter { list: self }
+    }
+}
+
+impl<'a, T: LinkedNode> IntoIterator for &'a LinkedList<T> where T::Linker: Linker<Node=T> {
+    type Item = T::Linker;
+    type IntoIter = Iter<T>;
+
+    #[inline(always)]
+    fn into_iter(self) -> Iter<T> {
+        self.iter()
+    }
+}
+
+impl<'a, T: LinkedNode> IntoIterator for &'a mut LinkedList<T> where T::Linker: Linker<Node=T> {
+    type Item = T::Linker;
+    type IntoIter = Iter<T>;
+
+    #[inline(always)]
+    fn into_iter(self) -> Iter<T> {
+        self.iter()
+    }
+}
+
+impl<T: LinkedNode> Iterator for IntoIter<T> where T::Linker: Linker<Node=T> {
+    type Item = T::Linker;
+
+    #[inline(always)]
+    fn next(&mut self) -> Option<T::Linker> {
+        self.list.pop_front()
+    }
+
+    #[inline(always)]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.list.len, Some(self.list.len))
+    }
+}
+
+impl<T: LinkedNode> DoubleEndedIterator for IntoIter<T> where T::Linker: Linker<Node=T> {
+    #[inline(always)]
+    fn next_back(&mut self) -> Option<T::Linker> {
+        self.list.pop_back()
+    }
+}
+
+impl<T: LinkedNode> ExactSizeIterator for IntoIter<T> where T::Linker: Linker<Node=T> {
+}
+
+impl<T: LinkedNode> Iterator for Iter<T> where T::Linker: Linker<Node=T> {
+    type Item = T::Linker;
+
+    fn next(&mut self) -> Option<T::Linker> {
         if self.len == 0 {
             None
         } else {
-            let ret = unsafe { &mut *self.head };
-            self.head = ret.get_next();
+            let ret = self.head.take().unwrap();
+            self.head = ret.as_ref().get_next();
             self.len -= 1;
             Some(ret)
         }
     }
 
-    #[inline]
+    #[inline(always)]
     fn size_hint(&self) -> (usize, Option<usize>) {
         (self.len, Some(self.len))
     }
 }
 
-impl<'a, T: 'a + LinkedNode<T>> DoubleEndedIterator for IterMut<'a, T> {
-    #[inline]
-    fn next_back(&mut self) -> Option<&'a mut T> {
+impl<T: LinkedNode> DoubleEndedIterator for Iter<T> where T::Linker: Linker<Node=T> {
+    fn next_back(&mut self) -> Option<T::Linker> {
         if self.len == 0 {
             None
         } else {
-            let ret = unsafe { &mut *self.tail };
-            self.tail = ret.get_prev();
+            let ret = self.tail.take().unwrap();
+            self.tail = ret.as_ref().get_prev();
             self.len -= 1;
             Some(ret)
         }
     }
 }
 
-impl<'a, T: 'a + LinkedNode<T>> ExactSizeIterator for IterMut<'a, T> {
+impl<T: LinkedNode> ExactSizeIterator for Iter<T> where T::Linker: Linker<Node=T> {
 }
 
-impl<'a, T: 'a + LinkedNode<T>> Clone for IterMut<'a, T> {
-    fn clone(&self) -> IterMut<'a, T> {
-        IterMut { len: self.len, head: self.head, tail: self.tail, _marker: self._marker }
+impl<T: LinkedNode> Clone for Iter<T> where T::Linker: Linker<Node=T> {
+    #[inline(always)]
+    fn clone(&self) -> Iter<T> {
+        Iter { len: self.len, head: self.head.clone(), tail: self.tail.clone() }
+    }
+}
+
+impl<T: LinkedNode> Linker for Shared<T> {
+    type Node = T;
+
+    #[inline(always)]
+    fn is_same(&self, other: &Shared<T>) -> bool {
+        **self == **other
+    }
+
+    #[inline(always)]
+    fn as_ref(&self) -> &T {
+        unsafe {
+            &***self
+        }
+    }
+
+    #[inline(always)]
+    fn as_mut(&mut self) -> &mut T {
+        unsafe {
+            &mut ***self
+        }
     }
 }
 
@@ -318,26 +429,90 @@ impl<'a, T: 'a + LinkedNode<T>> Clone for IterMut<'a, T> {
 mod tests {
     use super::*;
 
-    #[derive(PartialEq, Debug)]
-    struct Node {
-        value: usize,
-        prev: *mut Node,
-        next: *mut Node
+    #[derive(Debug)]
+    pub struct RefLinker<'a, T: 'a>(&'a mut T);
+
+    impl<'a, T: 'a + LinkedNode> RefLinker<'a, T> {
+        #[inline(always)]
+        pub const fn new(x: &'a mut T) -> RefLinker<'a, T> {
+            RefLinker(x)
+        }
     }
-    impl Node {
-        const fn new(value: usize) -> Node {
-            Node {
-                value: value,
-                prev: ptr::null_mut(),
-                next: ptr::null_mut()
+
+    impl<'a, T: 'a + LinkedNode> PartialEq for RefLinker<'a, T> {
+        #[inline(always)]
+        fn eq(&self, other: &RefLinker<'a, T>) -> bool {
+            self.0 as *const _ == other.0 as *const _
+        }
+    }
+
+    impl<'a, T: 'a + LinkedNode> Eq for RefLinker<'a, T> { }
+
+    impl<'a, T: 'a + LinkedNode> Clone for RefLinker<'a, T> {
+        #[inline(always)]
+        fn clone(&self) -> RefLinker<'a, T> {
+            unsafe {
+                RefLinker(*(&self.0 as *const &'a mut T))
             }
         }
     }
-    impl LinkedNode<Node> for Node {
-            fn get_prev(&self) -> *mut Node { self.prev }
-            fn set_prev(&mut self, node: *mut Node) { self.prev = node; }
-            fn get_next(&self) -> *mut Node { self.next }
-            fn set_next(&mut self, node: *mut Node) { self.next = node; }
+
+    impl<'a, T: 'a + LinkedNode> ::core::ops::Deref for RefLinker<'a, T> {
+        type Target = T;
+
+        #[inline(always)]
+        fn deref(&self) -> &T {
+            self.0
+        }
+    }
+
+    impl<'a, T: 'a + LinkedNode> ::core::ops::DerefMut for RefLinker<'a, T> {
+        #[inline(always)]
+        fn deref_mut(&mut self) -> &mut T {
+            self.0
+        }
+    }
+
+    impl<'a, T: 'a + LinkedNode> Linker for RefLinker<'a, T> {
+        type Node = T;
+
+        #[inline(always)]
+        fn is_same(&self, other: &RefLinker<'a, T>) -> bool {
+            self.0 as *const _ == other.0 as *const _
+        }
+
+        #[inline(always)]
+        fn as_ref(&self) -> &T {
+            self.0
+        }
+
+        #[inline(always)]
+        fn as_mut(&mut self) -> &mut T {
+            self.0
+        }
+    }
+
+    #[derive(Clone, PartialEq, Debug)]
+    struct Node<'a> {
+        value: usize,
+        prev: Option<RefLinker<'a, Node<'a>>>,
+        next: Option<RefLinker<'a, Node<'a>>>
+    }
+    impl<'a> Node<'a> {
+        const fn new(value: usize) -> Node<'a> {
+            Node {
+                value: value,
+                prev: None,
+                next: None
+            }
+        }
+    }
+    impl<'a> LinkedNode for Node<'a> {
+        type Linker = RefLinker<'a, Node<'a>>;
+        fn get_prev(&self) -> Option<RefLinker<'a, Node<'a>>> { self.prev.clone() }
+        fn set_prev(&mut self, node: Option<RefLinker<'a, Node<'a>>>) { self.prev = node; }
+        fn get_next(&self) -> Option<RefLinker<'a, Node<'a>>> { self.next.clone() }
+        fn set_next(&mut self, node: Option<RefLinker<'a, Node<'a>>>) { self.next = node; }
     }
 
     #[test]
@@ -348,27 +523,36 @@ mod tests {
             Node::new(0x7654),
             Node::new(0x3210),
         ];
-        let mut list = LinkedList::new();
+        let mut list = LinkedList::<Node>::new();
+
         unsafe {
             let ptr = data.as_mut_ptr();
-            list.push_back(&mut *ptr.offset(2));
-            list.push_front(&mut *ptr.offset(1));
-            list.push_front(&mut *ptr.offset(0));
-            list.push_back(&mut *ptr.offset(3));
+            list.push_back(RefLinker::new(&mut *ptr.offset(2)));
+            list.push_front(RefLinker::new(&mut *ptr.offset(1)));
+            list.push_front(RefLinker::new(&mut *ptr.offset(0)));
+            list.push_back(RefLinker::new(&mut *ptr.offset(3)));
         }
+
+        assert_eq!(list.front(), Some(RefLinker::new(&mut data[0])));
+        assert_eq!(list.back(), Some(RefLinker::new(&mut data[3])));
+
+        assert_eq!(list.len(), 4);
+        assert_eq!(list.iter().count(), 4);
+        assert_eq!(list.iter().rev().count(), 4);
 
         for i in 0..4 {
-            assert_eq!(list.iter().nth(i).unwrap(), &data[i]);
-            assert_eq!(list.iter().rev().nth(3 - i).unwrap(), &data[i]);
+            assert_eq!(*list.iter().nth(i).unwrap(), data[i]);
+            assert_eq!(*list.iter().rev().nth(3 - i).unwrap(), data[i]);
         }
 
         unsafe {
             let ptr = data.as_mut_ptr();
-            list.remove(&mut *ptr.offset(2));
-            list.remove(&mut *ptr.offset(0));
+            list.remove(&RefLinker::new(&mut *ptr.offset(2)));
+            list.remove(&RefLinker::new(&mut *ptr.offset(0)));
         }
-        assert_eq!(list.iter().nth(1).unwrap(), &data[3]);
-        assert_eq!(list.iter().rev().nth(1).unwrap(), &data[1]);
+
+        assert_eq!(*list.iter().nth(1).unwrap(), data[3]);
+        assert_eq!(*list.iter().rev().nth(1).unwrap(), data[1]);
     }
 }
 

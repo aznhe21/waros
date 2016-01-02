@@ -4,7 +4,7 @@ use super::kernel::PhysAddr;
 use lists::LinkedList;
 use core::cmp;
 use core::usize;
-use core::ptr::{self, Unique};
+use core::ptr::{Unique, Shared};
 
 const MAX_ORDER: usize = 11;
 
@@ -33,7 +33,7 @@ impl BuddyManager {
             while cur_len >= frame_len {
                 let frame = &mut self.frames[idx];
                 frame.order = cur_order;
-                self.orders[cur_order].push_front(frame);
+                self.orders[cur_order].push_front(unsafe { Shared::new(frame) });
 
                 idx += frame_len;
                 cur_len -= frame_len;
@@ -49,17 +49,17 @@ impl BuddyManager {
             .enumerate()
             .find_map(|(i, frames)| frames.pop_front().map(|frame| (order + i, frame)))
             .map(|(matched_order, frame)| {
-                // 分割
-                for cur_order in (order .. matched_order).rev() {
-                    let new_frame = frame.divide_by(cur_order);
-                    new_frame.order = cur_order;
-                    self.orders[cur_order].push_front(new_frame);
-                }
-
-                frame.using = true;
-                frame.order = order;
                 unsafe {
-                    Unique::new(frame)
+                    // 分割
+                    for cur_order in (order .. matched_order).rev() {
+                        let new_frame = (**frame).divide_by(cur_order);
+                        (*new_frame).order = cur_order;
+                        self.orders[cur_order].push_front(Shared::new(new_frame));
+                    }
+
+                    (**frame).using = true;
+                    (**frame).order = order;
+                    Unique::new(*frame)
                 }
             })
     }
@@ -82,7 +82,7 @@ impl BuddyManager {
                     break;
                 }
 
-                self.orders[order].remove(buddy);
+                self.orders[order].remove(&Shared::new(buddy));
                 top_index &= !count;
                 order += 1;
             }
@@ -90,7 +90,7 @@ impl BuddyManager {
             let top = self.frames.as_mut_ptr().offset(top_index as isize);
             (*top).using = false;
             (*top).order = order;
-            self.orders[order].push_front(top);
+            self.orders[order].push_front(Shared::new(top));
         }
     }
 
@@ -107,8 +107,8 @@ pub struct PageFrame {
     using: bool,
     order: usize,
     addr: PhysAddr,
-    prev: *mut PageFrame,
-    next: *mut PageFrame
+    prev: Option<Shared<PageFrame>>,
+    next: Option<Shared<PageFrame>>
 }
 
 impl PageFrame {
@@ -118,14 +118,14 @@ impl PageFrame {
             using: using,
             order: 0,
             addr: addr,
-            prev: ptr::null_mut(),
-            next: ptr::null_mut()
+            prev: None,
+            next: None
         }
     }
 
     #[inline]
-    fn divide_by(&mut self, order: usize) -> &mut PageFrame {
-        unsafe { &mut *(self as *mut PageFrame).offset((1 << (order - 1)) as isize) }
+    fn divide_by(&mut self, order: usize) -> *mut PageFrame {
+        unsafe { (self as *mut PageFrame).offset((1 << (order - 1)) as isize) }
     }
 
     #[inline(always)]
@@ -134,7 +134,7 @@ impl PageFrame {
     }
 }
 
-impl_linked_node!(PageFrame { prev: prev, next: next });
+impl_linked_node!(Shared<PageFrame> { prev: prev, next: next });
 
 static MANAGER: Force<BuddyManager> = Force::new();
 

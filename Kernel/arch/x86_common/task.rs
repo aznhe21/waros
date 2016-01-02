@@ -1,6 +1,6 @@
 use task;
 use timer;
-use core::ptr;
+use core::ptr::{self, Shared};
 use core::usize;
 use collections::Vec;
 
@@ -21,11 +21,11 @@ pub struct TaskEntity {
     stack: Vec<usize>,
     sp: *mut (),
     ip: *mut (),
-    prev: *mut TaskEntity,
-    next: *mut TaskEntity
+    prev: Option<Shared<TaskEntity>>,
+    next: Option<Shared<TaskEntity>>
 }
 
-impl_linked_node!(TaskEntity { prev: prev, next: next });
+impl_linked_node!(Shared<TaskEntity> { prev: prev, next: next });
 
 impl TaskEntity {
     #[inline]

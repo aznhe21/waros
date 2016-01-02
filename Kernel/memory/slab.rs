@@ -1,13 +1,14 @@
 use rt::{self, IterHelper, Force, ForceRef};
 use arch;
-use lists::{LinkedList, LinkedNode};
+use lists::{LinkedNode, LinkedList};
 use memory::kernel::VirtAddr;
 use core::cmp;
 use core::fmt;
 use core::mem;
 use core::slice;
 use core::usize;
-use core::ptr::{self, Unique};
+use core::ptr::{self, Unique, Shared};
+use core::marker::PhantomData;
 
 const MAX_ORDER: usize = 13;
 const MAX_OBJECT_SIZE: usize = arch::FRAME_SIZE;
@@ -58,7 +59,9 @@ impl SlabManager {
 
     #[inline]
     fn add<T>(&mut self, allocator: *mut SlabAllocator<T>) {
-        self.list.push_back(allocator as *mut SlabAllocator<()>);
+        unsafe {
+            self.list.push_back(Shared::new(allocator as *mut SlabAllocator<()>));
+        }
     }
 
     pub fn usable_size(&mut self, size: usize, align: usize) -> usize {
@@ -111,12 +114,12 @@ pub struct SlabAllocator<T: Sized> {
     full_list: LinkedList<Slab<T>>,
     free_list: LinkedList<Slab<T>>,
 
-    prev: *mut SlabAllocator<()>,
-    next: *mut SlabAllocator<()>
+    prev: Option<Shared<SlabAllocator<()>>>,
+    next: Option<Shared<SlabAllocator<()>>>
 }
 
-impl<T: Sized> LinkedNode<SlabAllocator<()>> for SlabAllocator<T> {
-    linked_node!(SlabAllocator<()> { prev: prev, next: next });
+impl<T: Sized> LinkedNode for SlabAllocator<T> {
+    linked_node!(Shared<SlabAllocator<()>> { prev: prev, next: next });
 }
 
 impl<T: Sized> SlabAllocator<T> {
@@ -165,8 +168,8 @@ impl<T: Sized> SlabAllocator<T> {
             full_list: LinkedList::new(),
             free_list: LinkedList::new(),
 
-            prev: ptr::null_mut(),
-            next: ptr::null_mut()
+            prev: None,
+            next: None
         };
         true
     }
@@ -190,10 +193,10 @@ impl<T: Sized> SlabAllocator<T> {
     }
 
     pub unsafe fn allocate_uninit(&mut self) -> *mut T {
-        match self.partial_list.front_mut() {
+        match self.partial_list.front() {
             Some(slab) => {
-                let ptr = slab.allocate(self);
-                if !ptr.is_null() && !slab.allocatable() {
+                let ptr = (**slab).allocate(self);
+                if !ptr.is_null() && !(**slab).allocatable() {
                     self.partial_list.pop_front();
                     self.full_list.push_back(slab);
                 }
@@ -203,12 +206,12 @@ impl<T: Sized> SlabAllocator<T> {
                 if self.free_list.is_empty() {
                     self.grow();
                 }
-                match self.free_list.front_mut() {
+                match self.free_list.front() {
                     Some(slab) => {
-                        let ptr = slab.allocate(self);
+                        let ptr = (**slab).allocate(self);
                         if !ptr.is_null() {
                             self.free_list.pop_front();
-                            if slab.allocatable() {
+                            if (**slab).allocatable() {
                                 self.partial_list.push_back(slab);
                             } else {
                                 self.full_list.push_back(slab);
@@ -235,19 +238,21 @@ impl<T: Sized> SlabAllocator<T> {
     }
 
     pub fn free(&mut self, ptr: *mut T) {
-        match self.partial_list.iter_mut().find(|slab| slab.matches(self, ptr)) {
-            Some(slab) => {
-                if slab.free(self, ptr) == self.objects_per_slab {
-                    self.partial_list.remove(slab);
-                    self.free_list.push_front(slab);
+        unsafe {
+            match self.partial_list.iter().find(|&slab| (**slab).matches(self, ptr)) {
+                Some(slab) => {
+                    if (**slab).free(self, ptr) == self.objects_per_slab {
+                        self.partial_list.remove(&slab);
+                        self.free_list.push_front(slab);
+                    }
+                },
+                None => {
+                    let slab = self.full_list.iter().find(|&slab| (**slab).matches(self, ptr))
+                        .expect("Unidentified Freeing Object");
+                    (**slab).free(self, ptr);
+                    self.full_list.remove(&slab);
+                    self.partial_list.push_front(slab);
                 }
-            },
-            None => {
-                let slab = self.full_list.iter_mut().find(|slab| slab.matches(self, ptr))
-                    .expect("Unidentified Freeing Object");
-                slab.free(self, ptr);
-                self.full_list.remove(slab);
-                self.partial_list.push_front(slab);
             }
         }
     }
@@ -298,7 +303,7 @@ impl<T: Sized> SlabAllocator<T> {
             })
         }.map_or_else(|| panic!("Unable to allocate a kernel object"), |(slab, data_addr)| {
             (*slab).init(self, data_addr.as_mut_ptr());
-            self.free_list.push_back(slab);
+            self.free_list.push_back(Shared::new(slab));
             self.total_objects += self.objects_per_slab;
 
             if let Some(ctor) = self.ctor {
@@ -329,12 +334,14 @@ struct Slab<T> {
     index: Bufctl,
     // color
 
-    prev: *mut Slab<T>,
-    next: *mut Slab<T>
+    prev: Option<Shared<Slab<T>>>,
+    next: Option<Shared<Slab<T>>>,
+
+    _marker: PhantomData<T>
 }
 
-impl<T> LinkedNode<Slab<T>> for Slab<T> {
-    linked_node!(Slab<T> { prev: prev, next: next });
+impl<T> LinkedNode for Slab<T> {
+    linked_node!(Shared<Slab<T>> { prev: prev, next: next });
 }
 
 impl<T> Slab<T> {
@@ -343,8 +350,10 @@ impl<T> Slab<T> {
             ptr: ptr,
             index: 0,
 
-            prev: ptr::null_mut(),
-            next: ptr::null_mut()
+            prev: None,
+            next: None,
+
+            _marker: PhantomData
         };
 
         let bufctl = self.bufctl(allocator.objects_per_slab);

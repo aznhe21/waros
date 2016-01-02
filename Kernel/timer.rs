@@ -4,7 +4,7 @@ use event::{Event, EventQueue};
 use core::intrinsics;
 use core::cmp::Ordering;
 use core::iter::FromIterator;
-use core::ptr::{self, Shared};
+use core::ptr::Shared;
 
 pub type TimerId = u16;
 
@@ -30,45 +30,46 @@ impl TimerManager {
         for (i, timer) in self.timer_pool.iter_mut().enumerate() {
             *timer = TimerEntity::new(i as TimerId);
         }
-        self.free_timers = LinkedList::from_iter(&mut self.timer_pool[..]);
+        self.free_timers = LinkedList::from_iter(self.timer_pool.iter_mut().map(|timer| unsafe { Shared::new(timer) }));
         self.ticking_timers = SortedList::new(TimerEntity::cmp);
         self.counter = 0;
     }
 
     fn with_handler(&mut self, handler: TimerHandler) -> TimerId {
-        let timer = self.free_timers.pop_front().expect("Not enough timers");
-        timer.handler = handler;
-        timer.id
+        unsafe {
+            let timer = self.free_timers.pop_front().expect("Not enough timers");
+            (**timer).handler = handler;
+            (**timer).id
+        }
     }
 
     fn remove(&mut self, timer: Shared<TimerEntity>) {
-        if self.ticking_timers.contains(*timer) {
-            self.ticking_timers.remove(*timer);
+        if self.ticking_timers.contains(&timer) {
+            self.ticking_timers.remove(&timer);
         }
-        self.free_timers.push_back(*timer);
+        self.free_timers.push_back(timer);
     }
 
     pub fn tick(&mut self, count: usize) {
         unsafe {
             self.counter = self.counter.wrapping_add(count);
-            let mut callbacks = LinkedList::new();
+            let mut callbacks = LinkedList::<TimerEntity>::new();
 
-            loop {
-                let timer_ptr = self.ticking_timers.front_ptr();
-                if timer_ptr.is_null() || (*timer_ptr).tick > self.counter {
+            while let Some(timer) = self.ticking_timers.front() {
+                if (**timer).tick > self.counter {
                     break;
                 }
-                self.ticking_timers.remove(timer_ptr);
-                match (*timer_ptr).handler {
+                self.ticking_timers.remove(&timer);
+                match (**timer).handler {
                     TimerHandler::Unset => unreachable!(),
-                    TimerHandler::Queue(ref mut queue) => queue.push(Event::Timer((*timer_ptr).id)),
-                    TimerHandler::Callback(_) => callbacks.push_back(timer_ptr)
+                    TimerHandler::Queue(ref mut queue) => queue.push(Event::Timer((**timer).id)),
+                    TimerHandler::Callback(_) => callbacks.push_back(timer)
                 }
             }
 
-            for timer in callbacks.iter_mut() {
-                match timer.handler {
-                    TimerHandler::Callback(callback) => callback(timer.id),
+            for timer in callbacks.iter() {
+                match (**timer).handler {
+                    TimerHandler::Callback(callback) => callback((**timer).id),
                     _ => intrinsics::unreachable()
                 }
             }
@@ -84,11 +85,11 @@ struct TimerEntity {
     id: TimerId,
     handler: TimerHandler,
     tick: usize,
-    prev: *mut TimerEntity,
-    next: *mut TimerEntity
+    prev: Option<Shared<TimerEntity>>,
+    next: Option<Shared<TimerEntity>>
 }
 
-impl_linked_node!(TimerEntity { prev: prev, next: next });
+impl_linked_node!(Shared<TimerEntity> { prev: prev, next: next });
 
 impl TimerEntity {
     #[inline]
@@ -97,8 +98,8 @@ impl TimerEntity {
             id: id,
             handler: TimerHandler::Unset,
             tick: 0,
-            prev: ptr::null_mut(),
-            next: ptr::null_mut()
+            prev: None,
+            next: None
         }
     }
 
@@ -110,11 +111,11 @@ impl TimerEntity {
             let counter = man.counter();
             if counter < (**this).tick {
                 // リストの最後に移動
-                man.ticking_timers.remove(*this);
+                man.ticking_timers.remove(&this);
             }
 
             (**this).tick = counter + delay;
-            man.ticking_timers.push(*this);
+            man.ticking_timers.push(this);
         }
     }
 
@@ -123,8 +124,8 @@ impl TimerEntity {
             let _blocker = IntBlocker::new();
 
             let mut man = manager();
-            if man.ticking_timers.contains(*this) {
-                man.ticking_timers.remove(*this);
+            if man.ticking_timers.contains(&this) {
+                man.ticking_timers.remove(&this);
             }
             (**this).tick = 0;
         }
