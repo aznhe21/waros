@@ -1,13 +1,11 @@
-pub use self::fixed_queue::FixedQueue;
-pub use self::fixed_list::FixedList;
-pub use self::linked_list::{Linker, LinkedNode, LinkedList};
+pub use self::ring_buffer::RingBuffer;
+pub use self::linked_list::{Linker, LinkedNode, DList};
 pub use self::sorted_list::SortedList;
 
 #[macro_use]
 mod macros;
 
-pub mod fixed_queue;
-pub mod fixed_list;
+pub mod ring_buffer;
 pub mod linked_list;
 pub mod sorted_list;
 

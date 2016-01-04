@@ -1,7 +1,7 @@
 use super::super::buddy;
 use rt::{self, Force, ForceRef};
 use arch;
-use lists::{LinkedNode, LinkedList};
+use lists::{LinkedNode, DList};
 use core::fmt;
 use core::mem;
 use core::ptr::{self, Unique, Shared};
@@ -19,7 +19,7 @@ const GENERIC_ALLOCATORS: [(usize, &'static str); 17] = gen!(
 
 // listにはKCacheAllocatorInnerを型パラメータを無視して格納
 pub struct KCacheManager {
-    list: LinkedList<KCacheAllocatorInner<()>>,
+    list: DList<KCacheAllocatorInner<()>>,
     allocator: KCacheAllocatorAllocator,
     //generic_allocators: [KCacheAllocatorInner<u8>; 17]
 }
@@ -30,7 +30,7 @@ unsafe impl Sync for KCacheManager { }
 impl KCacheManager {
     #[inline(always)]
     fn init(&mut self) {
-        self.list = LinkedList::new();
+        self.list = DList::new();
 
         self.allocator = KCacheAllocatorAllocator::new();
         let inner = &mut self.allocator.0 as *mut _;

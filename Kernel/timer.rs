@@ -1,5 +1,5 @@
 use rt::{Force, ForceRef, IntBlocker};
-use lists::{LinkedList, SortedList};
+use lists::{DList, SortedList};
 use event::{Event, EventQueue};
 use core::intrinsics;
 use core::cmp::Ordering;
@@ -16,7 +16,7 @@ pub enum TimerHandler {
 
 pub struct TimerManager {
     timer_pool: [TimerEntity; 256],
-    free_timers: LinkedList<TimerEntity>,
+    free_timers: DList<TimerEntity>,
     ticking_timers: SortedList<TimerEntity>,
     counter: usize
 }
@@ -30,7 +30,7 @@ impl TimerManager {
         for (i, timer) in self.timer_pool.iter_mut().enumerate() {
             *timer = TimerEntity::new(i as TimerId);
         }
-        self.free_timers = LinkedList::from_iter(self.timer_pool.iter_mut().map(|timer| unsafe { Shared::new(timer) }));
+        self.free_timers = DList::from_iter(self.timer_pool.iter_mut().map(|timer| unsafe { Shared::new(timer) }));
         self.ticking_timers = SortedList::new(TimerEntity::cmp);
         self.counter = 0;
     }
@@ -53,7 +53,7 @@ impl TimerManager {
     pub fn tick(&mut self, count: usize) {
         unsafe {
             self.counter = self.counter.wrapping_add(count);
-            let mut callbacks = LinkedList::<TimerEntity>::new();
+            let mut callbacks = DList::<TimerEntity>::new();
 
             while let Some(timer) = self.ticking_timers.front() {
                 if (**timer).tick > self.counter {

@@ -2,7 +2,7 @@ use rt::{Force, ForceRef, IntBlocker};
 use arch;
 use arch::interrupt;
 use arch::task::TaskEntity;
-use lists::{LinkedNode, LinkedList};
+use lists::{LinkedNode, DList};
 use memory;
 use memory::kcache::KCacheAllocator;
 use timer;
@@ -171,9 +171,9 @@ impl PartialEq for Task {
 impl Eq for Task { }
 
 pub struct TaskManager {
-    runnable_tasks: [LinkedList<TaskEntity>; PRIORITY_LEN],
-    suspended_tasks: LinkedList<TaskEntity>,
-    free_tasks: LinkedList<TaskEntity>,
+    runnable_tasks: [DList<TaskEntity>; PRIORITY_LEN],
+    suspended_tasks: DList<TaskEntity>,
+    free_tasks: DList<TaskEntity>,
     running_task: Shared<TaskEntity>,
     current_priority: Priority,
     timer: timer::UnmanagedTimer,
@@ -196,8 +196,8 @@ impl TaskManager {
 
             ptr::write(self, TaskManager {
                 runnable_tasks: mem::uninitialized(),
-                suspended_tasks: LinkedList::new(),
-                free_tasks: LinkedList::new(),
+                suspended_tasks: DList::new(),
+                free_tasks: DList::new(),
                 running_task: primary_task,
                 current_priority: Task::DEFAULT_PRIORITY,
                 timer: timer::UnmanagedTimer::with_callback(TaskManager::switch_by_timer),
@@ -205,7 +205,7 @@ impl TaskManager {
             });
 
             for list in self.runnable_tasks.iter_mut() {
-                *list = LinkedList::new();
+                *list = DList::new();
             }
 
             self.runnable_tasks[(**primary_task).priority as usize].push_back(primary_task);

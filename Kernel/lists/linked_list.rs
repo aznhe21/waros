@@ -1,5 +1,3 @@
-// TODO: DList by dlang
-
 use memory::kcache::{KCRc, RefCount};
 use core::ptr::Shared;
 use core::iter::FromIterator;
@@ -50,29 +48,29 @@ pub trait LinkedNode {
 }
 
 /// メモリ確保を伴わない双方向リンクリスト。
-pub struct LinkedList<T: LinkedNode> {
+pub struct DList<T: LinkedNode> {
     len: usize,
     head: Option<T::Linker>,
     tail: Option<T::Linker>
 }
 
-/// `LinkedList`に`IntoIterator`を実装するイテレータ。
+/// `DList`に`IntoIterator`を実装するイテレータ。
 pub struct IntoIter<T: LinkedNode> {
-    list: LinkedList<T>
+    list: DList<T>
 }
 
-/// `LinkedList`のイテレータ。
+/// `DList`のイテレータ。
 pub struct Iter<T: LinkedNode> {
     len: usize,
     head: Option<T::Linker>,
     tail: Option<T::Linker>
 }
 
-impl<T: LinkedNode> LinkedList<T> where T::Linker: Linker<Node=T> {
-    /// 空の`LinkedList`を作る。
+impl<T: LinkedNode> DList<T> where T::Linker: Linker<Node=T> {
+    /// 空の`DList`を作る。
     #[inline]
-    pub const fn new() -> LinkedList<T> {
-        LinkedList {
+    pub const fn new() -> DList<T> {
+        DList {
             len: 0,
             head: None,
             tail: None
@@ -285,8 +283,8 @@ impl<T: LinkedNode> LinkedList<T> where T::Linker: Linker<Node=T> {
     }
 }
 
-impl<T: LinkedNode> FromIterator<T::Linker> for LinkedList<T> where T::Linker: Linker<Node=T> {
-    fn from_iter<I: IntoIterator<Item=T::Linker>>(iterable: I) -> LinkedList<T> {
+impl<T: LinkedNode> FromIterator<T::Linker> for DList<T> where T::Linker: Linker<Node=T> {
+    fn from_iter<I: IntoIterator<Item=T::Linker>>(iterable: I) -> DList<T> {
         let mut iter = iterable.into_iter();
         if let Some(mut head) = iter.next() {
             head.as_mut().set_prev(None);
@@ -297,18 +295,18 @@ impl<T: LinkedNode> FromIterator<T::Linker> for LinkedList<T> where T::Linker: L
             });
             tail.as_mut().set_next(None);
 
-            LinkedList {
+            DList {
                 len: len,
                 head: Some(head),
                 tail: Some(tail)
             }
         } else {
-            LinkedList::new()
+            DList::new()
         }
     }
 }
 
-impl<T: LinkedNode> IntoIterator for LinkedList<T> where T::Linker: Linker<Node=T> {
+impl<T: LinkedNode> IntoIterator for DList<T> where T::Linker: Linker<Node=T> {
     type Item = T::Linker;
     type IntoIter = IntoIter<T>;
 
@@ -318,7 +316,7 @@ impl<T: LinkedNode> IntoIterator for LinkedList<T> where T::Linker: Linker<Node=
     }
 }
 
-impl<'a, T: LinkedNode> IntoIterator for &'a LinkedList<T> where T::Linker: Linker<Node=T> {
+impl<'a, T: LinkedNode> IntoIterator for &'a DList<T> where T::Linker: Linker<Node=T> {
     type Item = T::Linker;
     type IntoIter = Iter<T>;
 
@@ -328,7 +326,7 @@ impl<'a, T: LinkedNode> IntoIterator for &'a LinkedList<T> where T::Linker: Link
     }
 }
 
-impl<'a, T: LinkedNode> IntoIterator for &'a mut LinkedList<T> where T::Linker: Linker<Node=T> {
+impl<'a, T: LinkedNode> IntoIterator for &'a mut DList<T> where T::Linker: Linker<Node=T> {
     type Item = T::Linker;
     type IntoIter = Iter<T>;
 
@@ -545,7 +543,7 @@ mod tests {
             Node::new(0x7654),
             Node::new(0x3210),
         ];
-        let mut list = LinkedList::<Node>::new();
+        let mut list = DList::<Node>::new();
 
         unsafe {
             let ptr = data.as_mut_ptr();

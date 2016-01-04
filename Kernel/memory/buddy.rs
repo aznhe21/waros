@@ -1,7 +1,7 @@
 use rt::{IterHelper, Force, ForceRef};
 use arch;
 use super::kernel::PhysAddr;
-use lists::LinkedList;
+use lists::DList;
 use core::cmp;
 use core::usize;
 use core::ptr::Shared;
@@ -10,7 +10,7 @@ const MAX_ORDER: usize = 11;
 
 pub struct BuddyManager {
     frames: &'static mut [PageFrame],
-    orders: [LinkedList<PageFrame>; MAX_ORDER]
+    orders: [DList<PageFrame>; MAX_ORDER]
 }
 
 unsafe impl Send for BuddyManager { }
@@ -21,7 +21,7 @@ impl BuddyManager {
     fn init(&mut self, frames: &'static mut [PageFrame]) {
         self.frames = frames;
         for order in self.orders.iter_mut() {
-            *order = LinkedList::new();
+            *order = DList::new();
         }
 
         let order = cmp::min(MAX_ORDER - 1, usize::BITS - (self.frames.len() - 1).leading_zeros() as usize);

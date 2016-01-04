@@ -1,8 +1,8 @@
-use super::linked_list::{Linker, LinkedNode, LinkedList, Iter};
+use super::linked_list::{Linker, LinkedNode, DList, Iter};
 use core::cmp::Ordering::{self, Less};
 
 pub struct SortedList<T: LinkedNode> {
-    inner_list: LinkedList<T>,
+    inner_list: DList<T>,
     compare: fn(&T, &T) -> Ordering
 }
 
@@ -10,7 +10,7 @@ impl<T: LinkedNode> SortedList<T> where T::Linker: Linker<Node=T> {
     #[inline]
     pub fn new(compare: fn(&T, &T) -> Ordering) -> SortedList<T> {
         SortedList {
-            inner_list: LinkedList::new(),
+            inner_list: DList::new(),
             compare: compare
         }
     }

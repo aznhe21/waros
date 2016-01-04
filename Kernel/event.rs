@@ -1,5 +1,5 @@
 use rt::{Force, ForceRef};
-use lists::FixedQueue;
+use lists::RingBuffer;
 use drivers;
 use timer;
 use core::ops::{Deref, DerefMut};
@@ -11,20 +11,20 @@ pub enum Event {
     Device(drivers::Device)
 }
 
-pub struct EventQueue(FixedQueue<'static, Event>);
+pub struct EventQueue(RingBuffer<'static, Event>);
 
 unsafe impl Send for EventQueue { }
 unsafe impl Sync for EventQueue { }
 
 impl Deref for EventQueue {
-    type Target = FixedQueue<'static, Event>;
-    fn deref(&self) -> &FixedQueue<'static, Event> {
+    type Target = RingBuffer<'static, Event>;
+    fn deref(&self) -> &RingBuffer<'static, Event> {
         &self.0
     }
 }
 
 impl DerefMut for EventQueue {
-    fn deref_mut(&mut self) -> &mut FixedQueue<'static, Event> {
+    fn deref_mut(&mut self) -> &mut RingBuffer<'static, Event> {
         &mut self.0
     }
 }
@@ -43,7 +43,7 @@ pub fn init() {
     unsafe {
         let len = 128;
         let slice: Box<[Event]> = RawVec::with_capacity(len).into_box();
-        *Q.setup() = EventQueue(FixedQueue::new(&mut *Box::into_raw(slice)));
+        *Q.setup() = EventQueue(RingBuffer::new(&mut *Box::into_raw(slice)));
     }
 }
 
