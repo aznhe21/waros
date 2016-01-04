@@ -5,6 +5,7 @@ use lists::{LinkedNode, LinkedList};
 use core::fmt;
 use core::mem;
 use core::ptr::{self, Unique, Shared};
+use core::sync::atomic::{Ordering, AtomicUsize};
 
 /*macro_rules! gen {
     ($($size:expr),*) => {
@@ -102,9 +103,15 @@ impl KCacheAllocatorAllocator {
             }
         }
     }
+
+    #[inline(always)]
+    fn free<T>(&mut self, val: Shared<KCacheAllocatorInner<T>>) {
+        self.0.free(*val as *mut KCacheAllocatorInner<()>);
+    }
 }
 
 struct KCacheAllocatorInner<T> {
+    rc: AtomicUsize,
     name: &'static str,
     align: usize,
     _ctor: Option<fn(&mut T) -> ()>,
@@ -122,6 +129,7 @@ impl<T> KCacheAllocatorInner<T> {
     #[inline(always)]
     fn new(name: &'static str, align: usize, ctor: Option<fn(&mut T)>, object_size: usize) -> KCacheAllocatorInner<T> {
         KCacheAllocatorInner {
+            rc: AtomicUsize::new(1),
             name: name,
             align: align,
             _ctor: ctor,
@@ -207,7 +215,21 @@ impl<T> KCacheAllocator<T> {
 impl<T> Clone for KCacheAllocator<T> {
     #[inline(always)]
     fn clone(&self) -> KCacheAllocator<T> {
+        unsafe {
+            (**self.0).rc.fetch_add(1, Ordering::SeqCst);
+        }
         KCacheAllocator(self.0)
+    }
+}
+
+impl<T> Drop for KCacheAllocator<T> {
+    #[inline]
+    fn drop(&mut self) {
+        unsafe {
+            if (**self.0).rc.fetch_sub(1, Ordering::SeqCst) == 1 {
+                manager().allocator.free(self.0);
+            }
+        }
     }
 }
 
