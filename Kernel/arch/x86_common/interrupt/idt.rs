@@ -100,6 +100,7 @@ static mut idt: InterruptDescriptorTable = InterruptDescriptorTable {
 
 extern "C" {
     fn idt_null_handler();
+    fn idt_06_handler();
     fn idt_0c_handler();
     fn idt_0d_handler();
     fn idt_0e_handler();
@@ -134,6 +135,7 @@ pub unsafe fn init() {
         idt.set_exception(i, idt_null_handler);
     }
 
+    idt.set_exception(0x06, idt_06_handler);
     idt.set_exception(0x0C, idt_0c_handler);
     idt.set_exception(0x0D, idt_0d_handler);
     idt.set_exception(0x0E, idt_0e_handler);
@@ -159,8 +161,13 @@ pub unsafe fn init() {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn idt_empty_handler() {
-    panic!("Unhandled interrupt");
+pub unsafe extern "C" fn idt_empty_handler(esp: *const u32) {
+    panic!("Unhandled interrupt at {:p}", *esp as *const u8);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn invalid_opcode_handler(esp: *const u32) {
+    panic!("Invalid opcode (may out of memory occurred) at {:p}", *esp as *const u8);
 }
 
 #[inline]

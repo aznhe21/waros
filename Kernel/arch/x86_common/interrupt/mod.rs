@@ -58,9 +58,11 @@ pub extern "C" fn stop() -> usize {
     unsafe {
         let ret: usize;
         asm!("pushf
-              pop   $0
-              cli" : "=r"(ret) ::: "volatile");
-        ret & (1 << 9)
+              pop   %eax
+              andl  $$(1<<9), %eax
+              mov   %eax, $0
+              cli" : "=r"(ret) :: "eax" : "volatile");
+        ret
     }
 }
 
@@ -72,7 +74,7 @@ pub extern "C" fn restore(state: usize) {
               andl   $$(~(1<<9)), %eax
               orl    $0, %eax
               push   %eax
-              popf" :: "r"(state) : "eax" : "volatile");
+              popf" :: "m"(state) : "eax" : "volatile");
     }
 }
 
@@ -84,7 +86,7 @@ pub extern "C" fn restore(state: usize) {
               andl   $$(~(1<<9)), %rax
               orl    $0, %rax
               push   %rax
-              popf" :: "r"(state) : "rax" : "volatile");
+              popf" :: "m"(state) : "rax" : "volatile");
     }
 }
 

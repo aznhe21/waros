@@ -1,5 +1,6 @@
 .section .text
 .globl idt_null_handler
+.globl idt_06_handler
 .globl idt_0c_handler
 .globl idt_0d_handler
 .globl idt_0e_handler
@@ -10,7 +11,21 @@
 
 idt_null_handler:
 	pusha
+	mov %esp, %eax
+	add $32, %eax
+	push %eax
 	call idt_empty_handler
+	add $4, %esp
+	popa
+	iret
+
+idt_06_handler:
+	pusha
+	mov %esp, %eax
+	add $32, %eax
+	push %eax
+	call invalid_opcode_handler
+	add $4, %esp
 	popa
 	iret
 
