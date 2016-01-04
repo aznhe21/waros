@@ -4,7 +4,7 @@ use arch::interrupt;
 use arch::task::TaskEntity;
 use lists::{LinkedNode, LinkedList};
 use memory;
-use memory::kcache::{KCacheAllocator, KCBox};
+use memory::kcache::KCacheAllocator;
 use timer;
 use core::mem;
 use core::ptr::{self, Shared};

@@ -3,7 +3,6 @@ use arch;
 use super::kernel::PhysAddr;
 use lists::LinkedList;
 use core::cmp;
-use core::mem;
 use core::usize;
 use core::ptr::Shared;
 
