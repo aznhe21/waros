@@ -1,3 +1,6 @@
+// TODO: DList by dlang
+
+use memory::kcache::{KCRc, RefCount};
 use core::ptr::Shared;
 use core::iter::FromIterator;
 
@@ -422,6 +425,25 @@ impl<T: LinkedNode> Linker for Shared<T> {
         unsafe {
             &mut ***self
         }
+    }
+}
+
+impl<T: LinkedNode + RefCount> Linker for KCRc<T> {
+    type Node = T;
+
+    #[inline(always)]
+    fn is_same(&self, other: &KCRc<T>) -> bool {
+        &**self as *const T == &**other as *const T
+    }
+
+    #[inline(always)]
+    fn as_ref(&self) -> &T {
+        &**self
+    }
+
+    #[inline(always)]
+    fn as_mut(&mut self) -> &mut T {
+        &mut **self
     }
 }
 

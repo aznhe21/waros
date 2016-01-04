@@ -12,7 +12,7 @@ use arch::multiboot;
 pub mod rust;
 pub mod kernel;
 pub mod buddy;
-pub mod slab;
+pub mod kcache;
 
 pub const MAX_ADDR: *mut usize = usize::MAX as *mut usize;
 
@@ -31,7 +31,7 @@ fn init_by_frames<F: FnOnce(&mut [buddy::PageFrame])>(len: usize, init_frames: F
     init_frames(frames);
 
     buddy::init_by_frames(frames);
-    slab::init();
+    kcache::init();
 
     page::init();
 }

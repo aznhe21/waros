@@ -3,7 +3,8 @@ use arch;
 use arch::interrupt;
 use arch::task::TaskEntity;
 use lists::{LinkedNode, LinkedList};
-use memory::{self, slab};
+use memory;
+use memory::kcache::{KCacheAllocator, KCBox};
 use timer;
 use core::mem;
 use core::ptr::{self, Shared};
@@ -176,7 +177,7 @@ pub struct TaskManager {
     running_task: Shared<TaskEntity>,
     current_priority: Priority,
     timer: timer::UnmanagedTimer,
-    slab: &'static mut slab::SlabAllocator<TaskEntity>
+    kcache: KCacheAllocator<TaskEntity>
 }
 
 unsafe impl Send for TaskManager { }
@@ -188,8 +189,8 @@ impl TaskManager {
         unsafe {
             let _blocker = IntBlocker::new();
 
-            let slab = memory::check_oom_opt(slab::SlabAllocator::new("Task", mem::align_of::<Task>(), None));
-            let primary_task = Shared::new(memory::check_oom(slab.allocate_uninit()));
+            let kcache = memory::check_oom_opt(KCacheAllocator::new("Task", mem::align_of::<Task>(), None));
+            let primary_task = Shared::new(memory::check_oom(kcache.allocate_uninit()));
             TaskManager::init_task(primary_task, 0);
             (**primary_task).setup_primary();
 
@@ -200,7 +201,7 @@ impl TaskManager {
                 running_task: primary_task,
                 current_priority: Task::DEFAULT_PRIORITY,
                 timer: timer::UnmanagedTimer::with_callback(TaskManager::switch_by_timer),
-                slab: slab
+                kcache: kcache
             });
 
             for list in self.runnable_tasks.iter_mut() {
@@ -236,7 +237,7 @@ impl TaskManager {
     pub fn add<T>(&mut self, entry: extern "C" fn(arg: &T), arg: &T) -> Task {
         unsafe {
             let task = self.free_tasks.pop_front().unwrap_or_else(|| {
-                let task = Shared::new(memory::check_oom(self.slab.allocate_uninit()));
+                let task = Shared::new(memory::check_oom(self.kcache.allocate_uninit()));
                 TaskManager::init_task(task, task_counter.fetch_add(1, Ordering::SeqCst));
                 (**task).inplace_new();
                 task

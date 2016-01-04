@@ -1,27 +1,27 @@
-use super::slab;
+use super::kcache;
 
 #[no_mangle]
 pub extern fn __rust_allocate(size: usize, align: usize) -> *mut u8 {
-    slab::manager().allocate(size, align)
+    kcache::manager().allocate(size, align)
 }
 
 #[no_mangle]
 pub extern fn __rust_deallocate(ptr: *mut u8, _old_size: usize, align: usize) {
-    slab::manager().free(ptr, align)
+    kcache::manager().free(ptr, align)
 }
 
 #[no_mangle]
 pub extern fn __rust_reallocate(ptr: *mut u8, _old_size: usize, size: usize, align: usize) -> *mut u8 {
-    slab::manager().reallocate(ptr, size, align)
+    kcache::manager().reallocate(ptr, size, align)
 }
 
 #[no_mangle]
 pub extern fn __rust_reallocate_inplace(ptr: *mut u8, _old_size: usize, size: usize, align: usize) -> usize {
-    slab::manager().reallocate_inplace(ptr, size, align)
+    kcache::manager().reallocate_inplace(ptr, size, align)
 }
 
 #[no_mangle]
 pub extern fn __rust_usable_size(size: usize, align: usize) -> usize {
-    slab::manager().usable_size(size, align)
+    kcache::manager().usable_size(size, align)
 }
 

@@ -1,9 +1,10 @@
 use arch;
 use memory;
+use memory::buddy::PageFrame;
 use memory::kernel::{PhysAddr, VirtAddr};
 use core::ops;
 use core::slice;
-use core::ptr;
+use core::ptr::{self, Shared};
 use core::{u32, usize};
 
 // TODO: Support PAE
@@ -255,8 +256,9 @@ impl PageTable {
         VirtAddr::null()
     }
 
-    pub fn map_memory(&mut self, desc_flags: u16, table_flags: u16, phys_addr: PhysAddr, size: usize) -> VirtAddr {
+    pub fn map_memory(&mut self, desc_flags: u16, table_flags: u16, page: Shared<PageFrame>, size: usize) -> VirtAddr {
         let virt_addr = self.find_free_addr(size);
+        let phys_addr = unsafe { (**page).addr() };
         if !virt_addr.is_null() {
             let virt_range = virt_addr .. virt_addr + size;
             let phys_range = phys_addr .. phys_addr + size as u64;
