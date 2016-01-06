@@ -11,6 +11,7 @@ use core::mem;
 use core::usize;
 use core::ptr::{self, Shared};
 use core::sync::atomic::{Ordering, AtomicUsize};
+use alloc::boxed::{Box, FnBox};
 
 /*
 pub const TASK_SWITCH_INTERVAL: usize = ...;
@@ -588,6 +589,42 @@ pub fn add(entry: extern "C" fn(usize), arg: usize) -> Task {
     manager().add(entry, arg)
 }
 
+pub fn spawn<F: FnOnce() + Send + 'static>(f: F) -> Task
+{
+    let _blocker = IntBlocker::new();
+
+    let main = move || {
+        let r = Task::this().set_priority(Task::DEFAULT_PRIORITY);
+        debug_assert!(r.is_ok());
+        manager().switch_if_needed();// Release the execution right
+
+        // TODO: catch exceptions
+        f();
+    };
+
+    let mut man = manager();
+    let p: Box<FnBox()> = Box::new(main);
+    let task = man.add(spawn_entry, Box::into_raw(Box::new(p)) as usize);
+
+    // Switch to the spawning task immediately
+    let r = task.set_priority(Priority::Critical);
+    debug_assert!(r.is_ok());
+    mem::drop(_blocker);
+    if !man.switch_if_needed() {
+        sleep(0);
+    }
+
+    return task;
+
+    extern "C" fn spawn_entry(main: usize) {
+        let main = main as *mut Box<FnBox()>;
+        unsafe {
+            Box::from_raw(main)();
+        }
+    }
+}
+
+// TODO: try
 
 #[inline(always)]
 pub fn this() -> Task {

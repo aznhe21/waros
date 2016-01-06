@@ -16,7 +16,7 @@
 // Unstable language features
 #![feature(associated_consts, const_fn, concat_idents)]
 // Unstable library features
-#![feature(core_intrinsics, zero_one, num_bits_bytes, drop_in_place)]
+#![feature(core_intrinsics, zero_one, num_bits_bytes, drop_in_place, fnbox)]
 #![feature(unique, shared)]
 
 #![cfg_attr(any(target_arch="x86_64", target_arch="x86"), feature(step_by, iter_arith))]
@@ -93,7 +93,19 @@ pub fn kmain() -> ! {
 
     let (mut pri_count, mut a_count) = ((0usize, 0usize), (0usize, 0usize));
 
-    task::add(task_a, &mut a_count.1 as *mut usize as usize);
+    let a_count_addr = &mut a_count.1 as *mut usize as usize;
+    task::spawn(move || {
+        use core::intrinsics;
+
+        let a_count = a_count_addr as *mut usize;
+
+        log!("Task-A has launched");
+        loop {
+            unsafe {
+                intrinsics::volatile_store(a_count, intrinsics::overflowing_add(intrinsics::volatile_load(a_count), 1));
+            }
+        }
+    });
 
     let disp_timer = timer::Timer::with_queue(event::queue());
     disp_timer.reset(1000);
@@ -187,19 +199,6 @@ pub fn kmain() -> ! {
                 //arch::interrupt::enable_wait();
                 arch::interrupt::enable();
             }
-        }
-    }
-}
-
-extern "C" fn task_a(a_count: usize) {
-    use core::intrinsics;
-
-    let a_count = a_count as *mut usize;
-
-    log!("Task-A has launched");
-    loop {
-        unsafe {
-            intrinsics::volatile_store(a_count, intrinsics::overflowing_add(intrinsics::volatile_load(a_count), 1));
         }
     }
 }
