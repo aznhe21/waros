@@ -176,8 +176,24 @@ impl Task {
     }
 
     #[inline]
+    pub fn priority(&self) -> Result<Priority> {
+        let _blocker = IntBlocker::new();
+
+        if !self.is_valid() {
+            return Err(Error::InvalidTask)
+        }
+
+        Ok(self.data().priority)
+    }
+
+    #[inline]
     pub fn is_running(&self) -> bool {
         &manager().running_task == self
+    }
+
+    #[inline]
+    pub fn is_primary(&self) -> bool {
+        &manager().primary_task == self
     }
 
     #[inline]
@@ -197,7 +213,12 @@ impl Task {
 
     #[inline(always)]
     pub fn resume(&self) -> Result<()> {
-        manager().resume(self)
+        manager().resume(self, true)
+    }
+
+    #[inline(always)]
+    pub fn resume_later(&self) -> Result<()> {
+        manager().resume(self, false)
     }
 }
 
@@ -216,6 +237,7 @@ pub struct TaskManager {
     free_tasks: DList<TaskData>,
     running_task: Task,
     current_priority: Priority,
+    primary_task: Task,
     timer: timer::UnmanagedTimer,
     kcache: KCacheAllocator<TaskData>
 }
@@ -240,6 +262,7 @@ impl TaskManager {
                 free_tasks: DList::new(),
                 running_task: primary_task.clone(),
                 current_priority: Task::DEFAULT_PRIORITY,
+                primary_task: primary_task.clone(),
                 timer: timer::UnmanagedTimer::with_callback(TaskManager::switch_by_timer),
                 kcache: kcache
             });
@@ -352,12 +375,12 @@ impl TaskManager {
         }
     }
 
-    fn resume_by_timer(timer: timer::TimerId) {
+    fn resume_by_timer(timer_id: timer::TimerId) {
         unsafe {
             let data = manager().suspended_tasks.iter()
-                .find(|&data| (**data).timer.id() == timer)
+                .find(|&data| (**data).timer.id() == timer_id)
                 .unwrap();
-            let r = Task::new(data).resume();
+            let r = Task::new(data).resume_later();
             debug_assert!(r.is_ok());
         }
     }
@@ -410,7 +433,7 @@ impl TaskManager {
         Ok(())
     }
 
-    fn resume(&mut self, task: &Task) -> Result<()> {
+    fn resume(&mut self, task: &Task, now: bool) -> Result<()> {
         let _blocker = IntBlocker::new();
 
         if !task.is_valid() {
@@ -426,7 +449,7 @@ impl TaskManager {
         self.suspended_tasks.remove(&task.ptr);
         self.push_task(task.ptr);
 
-        if data.priority > self.current_priority {
+        if now && data.priority > self.current_priority {
             self.switch_to_next();
         }
 
