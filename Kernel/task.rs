@@ -6,6 +6,7 @@ use lists::{LinkedNode, DList};
 use memory;
 use memory::kcache::{KCacheAllocator, KCBox};
 use timer;
+use core::result;
 use core::mem;
 use core::usize;
 use core::ptr::{self, Shared};
@@ -45,6 +46,18 @@ pub unsafe fn leap(next_task: &mut TaskEntity) -> ! { ... }
 
 #[allow(non_upper_case_globals)]
 static task_counter: AtomicUsize = AtomicUsize::new(1);
+
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
+pub enum Error {
+    /// タスクが無効。
+    InvalidTask,
+    /// タスクが実行中。
+    InRunning,
+    /// タスクの状態が不正。
+    InvalidState
+}
+
+pub type Result<T> = result::Result<T, Error>;
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 #[repr(u8)]
@@ -168,22 +181,22 @@ impl Task {
     }
 
     #[inline]
-    pub fn terminate(&self) {
-        manager().terminate(self);
+    pub fn terminate(&self) -> Result<()> {
+        manager().terminate(self)
     }
 
     #[inline(always)]
-    pub fn set_priority(&self, priority: Priority) {
-        manager().set_priority(self, priority);
+    pub fn set_priority(&self, priority: Priority) -> Result<()> {
+        manager().set_priority(self, priority)
     }
 
     #[inline(always)]
-    pub fn suspend(&self) {
-        manager().suspend(self);
+    pub fn suspend(&self) -> Result<()> {
+        manager().suspend(self)
     }
 
     #[inline(always)]
-    pub fn resume(&self) {
+    pub fn resume(&self) -> Result<()> {
         manager().resume(self)
     }
 }
@@ -238,7 +251,8 @@ impl TaskManager {
             self.push_task(primary_task.ptr);
 
             // CPU返還タスク
-            self.add(yield_task, 0).set_priority(Priority::Idle);
+            let r = self.add(yield_task, 0).set_priority(Priority::Idle);
+            debug_assert!(r.is_ok());
 
             self.reset_timer();
         }
@@ -343,71 +357,86 @@ impl TaskManager {
             let data = manager().suspended_tasks.iter()
                 .find(|&data| (**data).timer.id() == timer)
                 .unwrap();
-            Task::new(data).resume();
+            let r = Task::new(data).resume();
+            debug_assert!(r.is_ok());
         }
     }
 
-    fn set_priority(&mut self, task: &Task, priority: Priority) {
+    fn set_priority(&mut self, task: &Task, priority: Priority) -> Result<()> {
         let _blocker = IntBlocker::new();
 
-        if task.is_valid() {
-            let data = task.data();
-            match data.state {
-                State::Runnable => if data.priority != priority {
-                    self.remove_task(task.ptr);
-                    data.priority = priority;
-                    self.push_task(task.ptr);
-
-                    if task.is_running() {
-                        self.current_priority = priority;
-                    }
-                },
-                State::Suspended => {
-                    data.priority = priority;
-                },
-                State::Free => panic!("Unable to modify a free task")
-            }
+        if !task.is_valid() {
+            return Err(Error::InvalidTask)
         }
+
+        let data = task.data();
+        match data.state {
+            State::Runnable => if data.priority != priority {
+                self.remove_task(task.ptr);
+                data.priority = priority;
+                self.push_task(task.ptr);
+
+                if task.is_running() {
+                    self.current_priority = priority;
+                }
+            },
+            State::Suspended => data.priority = priority,
+            State::Free => return Err(Error::InvalidState)
+        }
+
+        Ok(())
     }
 
-    fn suspend(&mut self, task: &Task) {
+    fn suspend(&mut self, task: &Task) -> Result<()> {
         let _blocker = IntBlocker::new();
 
-        if task.is_valid() {
-            let data = task.data();
-            assert_eq!(data.state, State::Runnable);
-            data.state = State::Suspended;
-
-            self.remove_task(task.ptr);
-            self.suspended_tasks.push_back(task.ptr);
-
-            if task.is_running() {
-                self.switch_to_next();
-            }
+        if !task.is_valid() {
+            return Err(Error::InvalidTask)
         }
+
+        let data = task.data();
+        if data.state != State::Runnable {
+            return Err(Error::InvalidState)
+        }
+        data.state = State::Suspended;
+
+        self.remove_task(task.ptr);
+        self.suspended_tasks.push_back(task.ptr);
+
+        if task.is_running() {
+            self.switch_to_next();
+        }
+
+        Ok(())
     }
 
-    fn resume(&mut self, task: &Task) {
+    fn resume(&mut self, task: &Task) -> Result<()> {
         let _blocker = IntBlocker::new();
 
-        if task.is_valid() {
-            let data = task.data();
-            assert_eq!(data.state, State::Suspended);
-            data.state = State::Runnable;
-
-            self.suspended_tasks.remove(&task.ptr);
-            self.push_task(task.ptr);
-
-            if data.priority > self.current_priority {
-                self.switch_to_next();
-            }
+        if !task.is_valid() {
+            return Err(Error::InvalidTask)
         }
+
+        let data = task.data();
+        if data.state != State::Suspended {
+            return Err(Error::InvalidState)
+        }
+        data.state = State::Runnable;
+
+        self.suspended_tasks.remove(&task.ptr);
+        self.push_task(task.ptr);
+
+        if data.priority > self.current_priority {
+            self.switch_to_next();
+        }
+
+        Ok(())
     }
 
     fn sleep(&mut self, duration: usize) {
         let task = Task::this();
         task.data().timer.reset(duration);
-        task.suspend();
+        assert!(task.suspend().is_ok());
     }
 
     fn yield_now(&mut self) {
@@ -460,13 +489,13 @@ impl TaskManager {
         }
     }
 
-    fn terminate_task(&mut self, task: &Task) {
+    fn terminate_task(&mut self, task: &Task) -> Result<()> {
         let data = task.data();
 
         match data.state {
             State::Runnable => self.remove_task(task.ptr),
             State::Suspended => self.suspended_tasks.remove(&task.ptr),
-            State::Free => panic!("Unable to remove a free task")
+            State::Free => return Err(Error::InvalidState)
         }
 
         // ここでは解放しない
@@ -474,16 +503,24 @@ impl TaskManager {
         self.free_tasks.push_back(task.ptr);
 
         data.terminate();
+
+        Ok(())
     }
 
-    fn terminate(&mut self, task: &Task) {
+    fn terminate(&mut self, task: &Task) -> Result<()> {
         let _blocker = IntBlocker::new();
 
-        if task.is_valid() {
-            assert!(!task.is_running());
-            self.terminate_task(task);
-            self.switch_if_needed();
+        if !task.is_valid() {
+            return Err(Error::InvalidTask)
         }
+        if task.is_running() {
+            return Err(Error::InRunning)
+        }
+
+        try!(self.terminate_task(task));
+        self.switch_if_needed();
+
+        Ok(())
     }
 
     fn terminated(&mut self) -> ! {
@@ -492,7 +529,7 @@ impl TaskManager {
         interrupt::disable();
         let cur_task = Task::this();
         let next_task = self.forward_task();
-        self.terminate_task(&cur_task);
+        assert!(self.terminate_task(&cur_task).is_ok());
 
         self.reset_timer();
         unsafe {
