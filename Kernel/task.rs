@@ -89,7 +89,7 @@ impl Priority {
 
 pub struct TaskData {
     pub id: usize,
-    pub timer: timer::UnmanagedTimer,
+    pub timer: timer::Timer,
     pub state: State,
     pub priority: Priority,
     pub entity: TaskEntity,
@@ -104,7 +104,7 @@ impl TaskData {
     fn new() -> TaskData {
         TaskData {
             id: usize::MAX,
-            timer: unsafe { timer::UnmanagedTimer::with_callback(TaskManager::resume_by_timer) },
+            timer: timer::Timer::with_callback(TaskManager::resume_by_timer),
             state: State::Free,
             priority: Task::DEFAULT_PRIORITY,
             entity: TaskEntity::new(),
@@ -231,7 +231,7 @@ impl PartialEq for Task {
 
 impl Eq for Task { }
 
-pub struct TaskManager {
+struct TaskManager {
     runnable_tasks: [DList<TaskData>; PRIORITY_LEN],
     suspended_tasks: DList<TaskData>,
     free_tasks: DList<TaskData>,
@@ -325,7 +325,7 @@ impl TaskManager {
         }
     }
 
-    pub fn add(&mut self, entry: extern "C" fn(usize), arg: usize) -> Task {
+    fn add(&mut self, entry: extern "C" fn(usize), arg: usize) -> Task {
         let _blocker = IntBlocker::new();
 
         unsafe {
@@ -579,8 +579,13 @@ pub fn init() {
 }
 
 #[inline(always)]
-pub fn manager() -> ForceRef<TaskManager> {
+fn manager() -> ForceRef<TaskManager> {
     MANAGER.as_ref()
+}
+
+#[inline(always)]
+pub fn add(entry: extern "C" fn(usize), arg: usize) -> Task {
+    manager().add(entry, arg)
 }
 
 
