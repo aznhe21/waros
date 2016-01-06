@@ -413,6 +413,10 @@ impl TaskManager {
     fn yield_now(&mut self) {
         if self.can_switch() {
             self.switch_to_next();
+        } else {
+            let state = interrupt::start();
+            interrupt::wait();
+            interrupt::restore(state);
         }
     }
 

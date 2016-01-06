@@ -27,34 +27,46 @@ const KERNEL_CS: usize = GDT_ENTRY_KERNEL_CS * 8;
 const KERNEL_DS: usize = GDT_ENTRY_KERNEL_DS * 8;
 
 #[inline(always)]
-pub extern "C" fn enable() {
+pub fn enable() {
     unsafe {
         asm!("sti" :::: "volatile");
     }
 }
 
 #[inline(always)]
-pub extern "C" fn wait() {
+pub fn wait() {
     unsafe {
         asm!("hlt" :::: "volatile");
     }
 }
 
 #[inline(always)]
-pub extern "C" fn enable_wait() {
+pub fn enable_wait() {
     unsafe {
         asm!("sti \n hlt" :::: "volatile");
     }
 }
 
 #[inline(always)]
-pub extern "C" fn disable() {
+pub fn disable() {
     unsafe {
         asm!("cli" :::: "volatile");
     }
 }
 
-pub extern "C" fn stop() -> usize {
+pub fn start() -> usize {
+    unsafe {
+        let ret: usize;
+        asm!("pushf
+              pop   %eax
+              andl  $$(1<<9), %eax
+              mov   %eax, $0
+              sti" : "=r"(ret) :: "eax" : "volatile");
+        ret
+    }
+}
+
+pub fn stop() -> usize {
     unsafe {
         let ret: usize;
         asm!("pushf
@@ -67,7 +79,7 @@ pub extern "C" fn stop() -> usize {
 }
 
 #[cfg(target_arch="x86")]
-pub extern "C" fn restore(state: usize) {
+pub fn restore(state: usize) {
     unsafe {
         asm!("pushf
               pop    %eax
@@ -79,7 +91,7 @@ pub extern "C" fn restore(state: usize) {
 }
 
 #[cfg(target_arch="x86_64")]
-pub extern "C" fn restore(state: usize) {
+pub fn restore(state: usize) {
     unsafe {
         asm!("pushf
               pop    %rax
