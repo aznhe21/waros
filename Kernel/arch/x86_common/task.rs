@@ -34,11 +34,11 @@ impl TaskEntity {
     }
 
     #[inline]
-    pub fn setup<T>(&mut self, entry: extern "C" fn(arg: &T), arg: &T, return_to: fn() -> !) {
+    pub fn setup(&mut self, entry: extern "C" fn(usize), arg: usize, return_to: fn() -> !) {
         let stack_len = self.stack.len();
         let sp = &mut self.stack[stack_len - 3 ..];
         sp[0] = return_to as usize;
-        sp[1] = arg as *const T as usize;
+        sp[1] = arg;
         self.sp = sp.as_mut_ptr() as *mut ();
         self.ip = entry as *mut ();
     }

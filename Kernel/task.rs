@@ -23,7 +23,7 @@ impl TaskEntity {
         ...
     }
 
-    pub fn setup<T>(&mut self, entry: extern "C" fn(arg: &T), arg: &T, return_to: fn() -> !) {
+    pub fn setup(&mut self, entry: extern "C" fn(usize), arg: usize, return_to: fn() -> !) {
         ...
     }
 
@@ -101,7 +101,7 @@ impl TaskData {
     }
 
     #[inline]
-    fn setup<T>(&mut self, id: usize, entry: extern "C" fn(arg: &T), arg: &T, return_to: fn() -> !) {
+    fn setup(&mut self, id: usize, entry: extern "C" fn(usize), arg: usize, return_to: fn() -> !) {
         self.id = id;
         self.state = State::Runnable;
         self.priority = Task::DEFAULT_PRIORITY;
@@ -154,9 +154,8 @@ impl Task {
     }
 
     #[inline]
-    pub fn exit(&self) -> ! {
-        assert!(self.is_running());
-        manager().terminated();
+    pub fn terminate(&self) {
+        manager().terminate(self);
     }
 
     #[inline(always)]
@@ -172,17 +171,6 @@ impl Task {
     #[inline(always)]
     pub fn resume(&self) {
         manager().resume(self)
-    }
-
-    #[inline(always)]
-    pub fn sleep(&self, duration: usize) {
-        manager().sleep(self, duration);
-    }
-
-    #[inline(always)]
-    pub fn yielding(&self) {
-        assert!(self.is_running());
-        manager().yielding();
     }
 }
 
@@ -236,7 +224,7 @@ impl TaskManager {
             self.runnable_tasks[(**primary_task.ptr).priority as usize].push_back(primary_task.ptr);
 
             // CPU返還タスク
-            self.add(yield_task, &()).set_priority(Priority::Idle);
+            self.add(yield_task, 0).set_priority(Priority::Idle);
 
             self.reset_timer();
         }
@@ -251,7 +239,7 @@ impl TaskManager {
         Priority::from_u8(priority as u8)
     }
 
-    pub fn add<T>(&mut self, entry: extern "C" fn(arg: &T), arg: &T) -> Task {
+    pub fn add(&mut self, entry: extern "C" fn(usize), arg: usize) -> Task {
         let _blocker = IntBlocker::new();
 
         unsafe {
@@ -272,7 +260,7 @@ impl TaskManager {
     }
 
     fn switch_by_timer(_: timer::TimerId) {
-        manager().yielding();
+        manager().yield_now();
     }
 
     fn resume_by_timer(timer: timer::TimerId) {
@@ -326,12 +314,13 @@ impl TaskManager {
         self.switch_to_next();
     }
 
-    fn sleep(&mut self, task: &Task, duration: usize) {
+    fn sleep(&mut self, duration: usize) {
+        let task = Task::this();
         task.data().timer.reset(duration);
         task.suspend();
     }
 
-    fn yielding(&mut self) {
+    fn yield_now(&mut self) {
         self.reset_timer();
         if self.runnable_tasks[self.current_priority as usize].len() != 1 {
             self.switch_to_next();
@@ -386,7 +375,7 @@ impl TaskManager {
         data.terminate();
     }
 
-    pub fn terminate(&mut self, task: Task) {
+    fn terminate(&mut self, task: &Task) {
         let _blocker = IntBlocker::new();
 
         assert!(!task.is_running());
@@ -408,6 +397,16 @@ impl TaskManager {
     }
 }
 
+fn task_terminated() -> ! {
+    manager().terminated();
+}
+
+extern "C" fn yield_task(_: usize) {
+    loop {
+        interrupt::wait();
+    }
+}
+
 static MANAGER: Force<TaskManager> = Force::new();
 
 #[inline]
@@ -420,13 +419,24 @@ pub fn manager() -> ForceRef<TaskManager> {
     MANAGER.as_ref()
 }
 
-fn task_terminated() -> ! {
+
+#[inline(always)]
+pub fn this() -> Task {
+    Task::this()
+}
+
+#[inline(always)]
+pub fn exit() -> ! {
     manager().terminated();
 }
 
-extern "C" fn yield_task(_: &()) {
-    loop {
-        interrupt::wait();
-    }
+#[inline(always)]
+pub fn sleep(duration: usize) {
+    manager().sleep(duration);
+}
+
+#[inline(always)]
+pub fn yield_now() {
+    manager().yield_now();
 }
 

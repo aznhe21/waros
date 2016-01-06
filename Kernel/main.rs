@@ -93,7 +93,7 @@ pub fn kmain() -> ! {
 
     let (mut pri_count, mut a_count) = ((0usize, 0usize), (0usize, 0usize));
 
-    task::manager().add(task_a, &(&mut a_count.1 as *mut usize));
+    task::manager().add(task_a, &mut a_count.1 as *mut usize as usize);
 
     let disp_timer = timer::Timer::with_queue(event::queue());
     disp_timer.reset(1000);
@@ -191,13 +191,15 @@ pub fn kmain() -> ! {
     }
 }
 
-extern "C" fn task_a(a_count: &*mut usize) {
+extern "C" fn task_a(a_count: usize) {
     use core::intrinsics;
+
+    let a_count = a_count as *mut usize;
 
     log!("Task-A has launched");
     loop {
         unsafe {
-            intrinsics::volatile_store(*a_count, intrinsics::overflowing_add(intrinsics::volatile_load(*a_count), 1));
+            intrinsics::volatile_store(a_count, intrinsics::overflowing_add(intrinsics::volatile_load(a_count), 1));
         }
     }
 }
