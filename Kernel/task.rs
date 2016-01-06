@@ -4,27 +4,22 @@ use arch::interrupt;
 use arch::task::TaskEntity;
 use lists::{LinkedNode, DList};
 use memory;
-use memory::kcache::KCacheAllocator;
+use memory::kcache::{KCacheAllocator, KCBox};
 use timer;
 use core::mem;
+use core::usize;
 use core::ptr::{self, Shared};
-use core::ops::{Deref, DerefMut};
 use core::sync::atomic::{Ordering, AtomicUsize};
 
 /*
 pub const TASK_SWITCH_INTERVAL: usize = ...;
-pub const TASK_STACK_SIZE: usize = ...;
 
 struct TaskEntity {
-    pub id: usize,
-    pub timer: timer::UnmanagedTimer,
-    pub state: task::State,
-    pub priority: task::Priority,
     ...
 }
 
 impl TaskEntity {
-    pub fn inplace_new(&mut self) {
+    pub fn new() -> TaskEntity {
         ...
     }
 
@@ -41,12 +36,10 @@ impl TaskEntity {
     }
 }
 
-impl LinkedNode for TaskEntity { ... }
+/// Switch to the next task
+pub unsafe fn switch(cur_task: &mut TaskEntity, next_task: &mut TaskEntity) { ... }
 
-/// Switch to next task
-pub unsafe fn switch(cur_task: &mut TaskEntity, next_task: &mut TaskEntity) -> ! { ... }
-
-/// Switch the task due to current task is terminated
+/// Switch the task due to it is terminated
 pub unsafe fn leap(next_task: &mut TaskEntity) -> ! { ... }
 */
 
@@ -81,35 +74,83 @@ impl Priority {
     }
 }
 
+pub struct TaskData {
+    pub id: usize,
+    pub timer: timer::UnmanagedTimer,
+    pub state: State,
+    pub priority: Priority,
+    pub entity: TaskEntity,
+    prev: Option<Shared<TaskData>>,
+    next: Option<Shared<TaskData>>
+}
+
+impl_linked_node!(Shared<TaskData> { prev: prev, next: next });
+
+impl TaskData {
+    #[inline]
+    fn new() -> TaskData {
+        TaskData {
+            id: usize::MAX,
+            timer: unsafe { timer::UnmanagedTimer::with_callback(TaskManager::resume_by_timer) },
+            state: State::Free,
+            priority: Task::DEFAULT_PRIORITY,
+            entity: TaskEntity::new(),
+            prev: None,
+            next: None
+        }
+    }
+
+    #[inline]
+    fn setup<T>(&mut self, id: usize, entry: extern "C" fn(arg: &T), arg: &T, return_to: fn() -> !) {
+        self.id = id;
+        self.state = State::Runnable;
+        self.priority = Task::DEFAULT_PRIORITY;
+        self.entity.setup(entry, arg, return_to);
+    }
+
+    #[inline]
+    fn setup_primary(&mut self) {
+        self.id = 0;
+        self.state = State::Runnable;
+        self.entity.setup_primary();
+    }
+
+    fn terminate(&mut self) {
+        self.entity.terminate();
+        self.timer.clear();
+    }
+}
+
+#[derive(Clone)]
 pub struct Task {
-    entity: Shared<TaskEntity>
+    ptr: Shared<TaskData>
 }
 
 impl Task {
     pub const DEFAULT_PRIORITY: Priority = Priority::Middle;
 
     #[inline(always)]
-    fn from_entity(entity: *mut TaskEntity) -> Task {
-        unsafe {
-            Task { entity: Shared::new(entity) }
-        }
-    }
-
-    #[inline(always)]
-    fn entity(&self) -> &mut TaskEntity {
-        unsafe {
-            &mut **self.entity
+    fn new(ptr: Shared<TaskData>) -> Task {
+        Task {
+            ptr: ptr
         }
     }
 
     #[inline]
     pub fn this() -> Task {
-        Task::from_entity(*manager().running_task)
+        manager().running_task.clone()
+    }
+
+    #[inline(always)]
+    fn data(&self) -> &mut TaskData {
+        unsafe {
+            &mut **self.ptr
+        }
     }
 
     #[inline]
     pub fn is_running(&self) -> bool {
-        manager().running_task().entity() as *const _ == self.entity() as *const _
+        &manager().running_task == self
     }
 
     #[inline]
@@ -145,39 +186,23 @@ impl Task {
     }
 }
 
-impl Deref for Task {
-    type Target = TaskEntity;
-
-    #[inline(always)]
-    fn deref(&self) -> &TaskEntity {
-        self.entity()
-    }
-}
-
-impl DerefMut for Task {
-    #[inline(always)]
-    fn deref_mut(&mut self) -> &mut TaskEntity {
-        self.entity()
-    }
-}
-
 impl PartialEq for Task {
     #[inline(always)]
     fn eq(&self, other: &Task) -> bool {
-        *self.entity == *other.entity
+        *self.ptr == *other.ptr
     }
 }
 
 impl Eq for Task { }
 
 pub struct TaskManager {
-    runnable_tasks: [DList<TaskEntity>; PRIORITY_LEN],
-    suspended_tasks: DList<TaskEntity>,
-    free_tasks: DList<TaskEntity>,
-    running_task: Shared<TaskEntity>,
+    runnable_tasks: [DList<TaskData>; PRIORITY_LEN],
+    suspended_tasks: DList<TaskData>,
+    free_tasks: DList<TaskData>,
+    running_task: Task,
     current_priority: Priority,
     timer: timer::UnmanagedTimer,
-    kcache: KCacheAllocator<TaskEntity>
+    kcache: KCacheAllocator<TaskData>
 }
 
 unsafe impl Send for TaskManager { }
@@ -189,16 +214,16 @@ impl TaskManager {
         unsafe {
             let _blocker = IntBlocker::new();
 
-            let kcache = memory::check_oom_opt(KCacheAllocator::new("Task", mem::align_of::<Task>(), None));
-            let primary_task = Shared::new(memory::check_oom(kcache.allocate_uninit()));
-            TaskManager::init_task(primary_task, 0);
-            (**primary_task).setup_primary();
+            let kcache = memory::check_oom_opt(KCacheAllocator::new("Task", mem::align_of::<TaskData>(), None));
+            let mut primary_box = memory::check_oom_opt(KCBox::new(kcache.clone(), TaskData::new()));
+            primary_box.setup_primary();
 
+            let primary_task = Task::new(Shared::new(KCBox::into_raw(primary_box)));
             ptr::write(self, TaskManager {
                 runnable_tasks: mem::uninitialized(),
                 suspended_tasks: DList::new(),
                 free_tasks: DList::new(),
-                running_task: primary_task,
+                running_task: primary_task.clone(),
                 current_priority: Task::DEFAULT_PRIORITY,
                 timer: timer::UnmanagedTimer::with_callback(TaskManager::switch_by_timer),
                 kcache: kcache
@@ -208,20 +233,12 @@ impl TaskManager {
                 *list = DList::new();
             }
 
-            self.runnable_tasks[(**primary_task).priority as usize].push_back(primary_task);
+            self.runnable_tasks[(**primary_task.ptr).priority as usize].push_back(primary_task.ptr);
 
             // CPU返還タスク
             self.add(yield_task, &()).set_priority(Priority::Idle);
 
             self.reset_timer();
-        }
-    }
-
-    fn init_task(entity: Shared<TaskEntity>, id: usize) {
-        unsafe {
-            (**entity).id = id;
-            (**entity).priority = Task::DEFAULT_PRIORITY;
-            (**entity).timer = timer::UnmanagedTimer::with_callback(TaskManager::resume_by_timer);
         }
     }
 
@@ -235,19 +252,17 @@ impl TaskManager {
     }
 
     pub fn add<T>(&mut self, entry: extern "C" fn(arg: &T), arg: &T) -> Task {
-        unsafe {
-            let task = self.free_tasks.pop_front().unwrap_or_else(|| {
-                let task = Shared::new(memory::check_oom(self.kcache.allocate_uninit()));
-                TaskManager::init_task(task, task_counter.fetch_add(1, Ordering::SeqCst));
-                (**task).inplace_new();
-                task
-            });
-            (**task).priority = Task::DEFAULT_PRIORITY;
-            (**task).state = State::Runnable;
-            (**task).setup(entry, arg, task_terminated);
-            self.runnable_tasks[(**task).priority as usize].push_back(task);
+        let _blocker = IntBlocker::new();
 
-            Task::from_entity(*task)
+        unsafe {
+            let data = self.free_tasks.pop_front().unwrap_or_else(|| {
+                let b = memory::check_oom_opt(KCBox::new(self.kcache.clone(), TaskData::new()));
+                Shared::new(KCBox::into_raw(b))
+            });
+            (**data).setup(task_counter.fetch_add(1, Ordering::SeqCst), entry, arg, task_terminated);
+            self.runnable_tasks[(**data).priority as usize].push_back(data);
+
+            Task::new(data)
         }
     }
 
@@ -262,59 +277,57 @@ impl TaskManager {
 
     fn resume_by_timer(timer: timer::TimerId) {
         unsafe {
-            let entity = manager().suspended_tasks.iter()
-                .find(|&entity| (**entity).timer.id() == timer)
+            let data = manager().suspended_tasks.iter()
+                .find(|&data| (**data).timer.id() == timer)
                 .unwrap();
-            Task::from_entity(*entity).resume();
+            Task::new(data).resume();
         }
     }
 
     fn set_priority(&mut self, task: &Task, priority: Priority) {
-        let _blocker = IntBlocker::new();
-
-        let entity = task.entity();
-        match entity.state {
+        let data = task.data();
+        match data.state {
             State::Runnable => {
-                self.runnable_tasks[entity.priority as usize].remove(&task.entity);
-                entity.priority = priority;
-                self.runnable_tasks[entity.priority as usize].push_back(task.entity);
+                self.runnable_tasks[data.priority as usize].remove(&task.ptr);
+                data.priority = priority;
+                self.runnable_tasks[data.priority as usize].push_back(task.ptr);
             },
             State::Suspended => {
-                entity.priority = priority;
+                data.priority = priority;
             },
             State::Free => panic!("Unable to modify a free task")
         }
     }
 
     fn suspend(&mut self, task: &Task) {
-        let entity = task.entity();
-        assert_eq!(entity.state, State::Runnable);
-        entity.state = State::Suspended;
+        let data = task.data();
+        assert_eq!(data.state, State::Runnable);
+        data.state = State::Suspended;
 
         if task.is_running() {
             interrupt::disable();
-            self.runnable_tasks[entity.priority as usize].remove(&task.entity);
-            self.suspended_tasks.push_back(task.entity);
+            self.runnable_tasks[data.priority as usize].remove(&task.ptr);
+            self.suspended_tasks.push_back(task.ptr);
             let next_task = self.forward_task();
             self.switch_task(task, &next_task);
         } else {
-            self.runnable_tasks[entity.priority as usize].remove(&task.entity);
-            self.suspended_tasks.push_back(task.entity);
+            self.runnable_tasks[data.priority as usize].remove(&task.ptr);
+            self.suspended_tasks.push_back(task.ptr);
         }
     }
 
     fn resume(&mut self, task: &Task) {
-        let entity = task.entity();
-        assert_eq!(entity.state, State::Suspended);
-        entity.state = State::Runnable;
+        let data = task.data();
+        assert_eq!(data.state, State::Suspended);
+        data.state = State::Runnable;
 
-        self.suspended_tasks.remove(&task.entity);
-        self.runnable_tasks[entity.priority as usize].push_back(task.entity);
+        self.suspended_tasks.remove(&task.ptr);
+        self.runnable_tasks[data.priority as usize].push_back(task.ptr);
         self.switch_to_next();
     }
 
     fn sleep(&mut self, task: &Task, duration: usize) {
-        task.entity().timer.reset(duration);
+        task.data().timer.reset(duration);
         task.suspend();
     }
 
@@ -328,62 +341,49 @@ impl TaskManager {
     }
 
     #[inline]
-    fn running_task(&mut self) -> Task {
-        Task::from_entity(*self.running_task)
-    }
-
-    #[inline]
     fn forward_task(&mut self) -> Task {
-        unsafe {
-            // 次のタスクか最初のタスク
-            let next = match (**self.running_task).get_next() {
-                Some(next) => next,
-                _ => {
-                    self.current_priority = self.highest_priority();
-                    self.runnable_tasks[self.current_priority as usize].front().unwrap()
-                }
-            };
+        // 次のタスクか最初のタスク
+        let next = Task::new(match self.running_task.data().get_next() {
+            Some(next) => next,
+            _ => {
+                self.current_priority = self.highest_priority();
+                self.runnable_tasks[self.current_priority as usize].front().unwrap()
+            }
+        });
 
-            debug_assert!(*self.running_task != *next);
-            self.running_task = next;
+        debug_assert!(self.running_task != next);
+        self.running_task = next;
 
-            Task::from_entity(*self.running_task)
-        }
+        self.running_task.clone()
     }
 
     #[inline]
     fn switch_task(&mut self, cur_task: &Task, next_task: &Task) {
         unsafe {
-            arch::task::switch(cur_task.entity(), next_task.entity());
+            arch::task::switch(&mut cur_task.data().entity, &mut next_task.data().entity);
         }
     }
 
     pub fn switch_to_next(&mut self) {
-        let cur_task = self.running_task();
+        let cur_task = Task::this();
         let next_task = self.forward_task();
         self.switch_task(&cur_task, &next_task);
     }
 
     fn remove_task(&mut self, task: &Task) {
-        let entity = task.entity();
-        match task.state {
-            State::Runnable => {
-                self.runnable_tasks[entity.priority as usize].remove(&task.entity);
+        let data = task.data();
 
-                // ここでは解放しない
-                entity.state = State::Free;
-                self.free_tasks.push_back(task.entity);
-            },
-            State::Suspended => {
-                self.suspended_tasks.remove(&task.entity);
-
-                entity.state = State::Free;
-                self.free_tasks.push_back(task.entity);
-            },
+        match data.state {
+            State::Runnable => self.runnable_tasks[data.priority as usize].remove(&task.ptr),
+            State::Suspended => self.suspended_tasks.remove(&task.ptr),
             State::Free => panic!("Unable to remove a free task")
         }
 
-        task.entity().terminate();
+        // ここでは解放しない
+        data.state = State::Free;
+        self.free_tasks.push_back(task.ptr);
+
+        data.terminate();
     }
 
     pub fn terminate(&mut self, task: Task) {
@@ -397,13 +397,13 @@ impl TaskManager {
         debug_log!("Task terminated");
 
         interrupt::disable();
-        let cur_task = self.running_task();
+        let cur_task = Task::this();
         let next_task = self.forward_task();
         self.remove_task(&cur_task);
 
         self.reset_timer();
         unsafe {
-            arch::task::leap(next_task.entity());
+            arch::task::leap(&mut next_task.data().entity);
         }
     }
 }

@@ -1,11 +1,9 @@
-use task;
-use timer;
-use core::ptr::{self, Shared};
+use core::ptr;
 use core::usize;
 use collections::Vec;
 
 pub const TASK_SWITCH_INTERVAL: usize = 20;
-pub const TASK_STACK_SIZE: usize = 64 * 1024;
+const TASK_STACK_SIZE: usize = 64 * 1024;
 
 #[allow(improper_ctypes)]
 extern "C" {
@@ -14,27 +12,24 @@ extern "C" {
 }
 
 pub struct TaskEntity {
-    pub id: usize,
-    pub timer: timer::UnmanagedTimer,
-    pub state: task::State,
-    pub priority: task::Priority,
     stack: Vec<usize>,
     sp: *mut (),
-    ip: *mut (),
-    prev: Option<Shared<TaskEntity>>,
-    next: Option<Shared<TaskEntity>>
+    ip: *mut ()
 }
-
-impl_linked_node!(Shared<TaskEntity> { prev: prev, next: next });
 
 impl TaskEntity {
     #[inline]
-    pub fn inplace_new(&mut self) {
-        let stack_len = TASK_STACK_SIZE / usize::BYTES;
+    pub fn new() -> TaskEntity {
         unsafe {
-            // 不定値でdropしないようptr::writeで書き込む
-            ptr::write(&mut self.stack, Vec::with_capacity(stack_len));
-            self.stack.set_len(stack_len);
+            let stack_len = TASK_STACK_SIZE / usize::BYTES;
+            let mut stack = Vec::with_capacity(stack_len);
+            stack.set_len(stack_len);
+
+            TaskEntity {
+                stack: stack,
+                sp: ptr::null_mut(),
+                ip: ptr::null_mut()
+            }
         }
     }
 
