@@ -378,11 +378,11 @@ impl TaskManager {
 
     fn resume_by_timer(timer_id: timer::TimerId) {
         unsafe {
-            let data = manager().suspended_tasks.iter()
-                .find(|&data| (**data).timer.id() == timer_id)
-                .unwrap();
-            let r = Task::new(data).resume_later();
-            debug_assert!(r.is_ok());
+            // sleep中にresumeされる場合がある
+            if let Some(data) = manager().suspended_tasks.iter().find(|&data| (**data).timer.id() == timer_id) {
+                let r = Task::new(data).resume_later();
+                debug_assert!(r.is_ok());
+            }
         }
     }
 
