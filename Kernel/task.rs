@@ -282,6 +282,16 @@ impl TaskManager {
         }
     }
 
+    fn task_is_valid(&self, id: usize) -> bool {
+        let list_has_task = |list: &DList<TaskData>| -> bool {
+            unsafe {
+                list.iter().any(|data| (**data).id == id)
+            }
+        };
+
+        self.runnable_tasks.iter().rev().any(&list_has_task) || list_has_task(&self.suspended_tasks)
+    }
+
     // 実行可能状態タスクのある最も高い優先度を返す。
     fn highest_priority(&self) -> Priority {
         let (priority, _) = self.runnable_tasks.iter()
@@ -341,16 +351,6 @@ impl TaskManager {
         }
     }
 
-    fn task_is_valid(&self, id: usize) -> bool {
-        let list_has_task = |list: &DList<TaskData>| -> bool {
-            unsafe {
-                list.iter().any(|task| (**task).id == id)
-            }
-        };
-
-        self.runnable_tasks.iter().rev().any(&list_has_task) || list_has_task(&self.suspended_tasks)
-    }
-
     #[inline]
     fn reset_timer(&mut self) {
         self.timer.reset(arch::task::TASK_SWITCH_INTERVAL);
@@ -376,13 +376,103 @@ impl TaskManager {
         }
     }
 
-    fn resume_by_timer(timer_id: timer::TimerId) {
+    fn yield_now(&mut self) {
+        if self.can_switch() {
+            self.switch_to_next();
+        } else {
+            let state = interrupt::start();
+            interrupt::wait();
+            interrupt::restore(state);
+        }
+    }
+
+    /// スイッチした場合`true`を返す。
+    fn switch_if_needed(&mut self) -> bool {
+        let _blocker = IntBlocker::new();
+
+        if self.is_switch_needed() {
+            self.switch_to_next();
+            true
+        } else {
+            false
+        }
+    }
+
+    // 内部変数を次のタスクに移行し、次のタスクを返す
+    #[inline]
+    fn forward_task(&mut self) -> Task {
+        let highest_priority = self.highest_priority_without(&self.running_task);
+        let next = Task::new(if self.current_priority != highest_priority {
+            self.current_priority = highest_priority;
+            self.current_tasks().front().unwrap()
+        } else {
+            // 次のタスクか最初のタスク
+            LinkedNode::get_next(self.running_task.data()).unwrap_or_else(|| self.current_tasks().front().unwrap())
+        });
+
+        debug_assert!(self.running_task != next);
+        self.running_task = next;
+
+        self.running_task.clone()
+    }
+
+    fn switch_to_next(&mut self) {
+        self.reset_timer();
+
+        let cur_task = Task::this();
+        let next_task = self.forward_task();
         unsafe {
-            // sleep中にresumeされる場合がある
-            if let Some(data) = manager().suspended_tasks.iter().find(|&data| (**data).timer.id() == timer_id) {
-                let r = Task::new(data).resume_later();
-                debug_assert!(r.is_ok());
-            }
+            arch::task::switch(&mut cur_task.data().entity, &mut next_task.data().entity);
+        }
+    }
+
+    fn terminate_task(&mut self, task: &Task) -> Result<()> {
+        let data = task.data();
+
+        match data.state {
+            State::Runnable => self.remove_task(task.ptr),
+            State::Suspended => self.suspended_tasks.remove(&task.ptr),
+            State::Free => return Err(Error::InvalidState)
+        }
+
+        // ここでは解放しない
+        data.state = State::Free;
+        self.free_tasks.push_back(task.ptr);
+
+        data.terminate();
+
+        Ok(())
+    }
+
+    fn terminate(&mut self, task: &Task) -> Result<()> {
+        let _blocker = IntBlocker::new();
+
+        if !task.is_valid() {
+            return Err(Error::InvalidTask)
+        }
+        if task.is_running() {
+            return Err(Error::InRunning)
+        }
+
+        let r = self.terminate_task(task);
+        debug_assert!(r.is_ok());
+        self.switch_if_needed();
+
+        Ok(())
+    }
+
+    fn terminated(&mut self) -> ! {
+        debug_log!("Task terminated");
+
+        interrupt::disable();
+        let cur_task = Task::this();
+        let next_task = self.forward_task();
+        let r = self.terminate_task(&cur_task);
+        debug_assert!(r.is_ok());
+
+        self.reset_timer();
+        unsafe {
+            arch::task::leap(&mut next_task.data().entity);
         }
     }
 
@@ -409,6 +499,16 @@ impl TaskManager {
         }
 
         Ok(())
+    }
+
+    fn resume_by_timer(timer_id: timer::TimerId) {
+        unsafe {
+            // sleep中にresumeされる場合がある
+            if let Some(data) = manager().suspended_tasks.iter().find(|&data| (**data).timer.id() == timer_id) {
+                let r = Task::new(data).resume_later();
+                debug_assert!(r.is_ok());
+            }
+        }
     }
 
     fn suspend(&mut self, task: &Task) -> Result<()> {
@@ -461,104 +561,6 @@ impl TaskManager {
         let task = Task::this();
         task.data().timer.reset(duration);
         assert!(task.suspend().is_ok());
-    }
-
-    fn yield_now(&mut self) {
-        if self.can_switch() {
-            self.switch_to_next();
-        } else {
-            let state = interrupt::start();
-            interrupt::wait();
-            interrupt::restore(state);
-        }
-    }
-
-    // 内部変数を次のタスクに移行し、次のタスクを返す
-    #[inline]
-    fn forward_task(&mut self) -> Task {
-        let highest_priority = self.highest_priority_without(&self.running_task);
-        let next = Task::new(if self.current_priority != highest_priority {
-            self.current_priority = highest_priority;
-            self.current_tasks().front().unwrap()
-        } else {
-            // 次のタスクか最初のタスク
-            LinkedNode::get_next(self.running_task.data()).unwrap_or_else(|| self.current_tasks().front().unwrap())
-        });
-
-        debug_assert!(self.running_task != next);
-        self.running_task = next;
-
-        self.running_task.clone()
-    }
-
-    fn switch_to_next(&mut self) {
-        self.reset_timer();
-
-        let cur_task = Task::this();
-        let next_task = self.forward_task();
-        unsafe {
-            arch::task::switch(&mut cur_task.data().entity, &mut next_task.data().entity);
-        }
-    }
-
-    /// スイッチした場合`true`を返す。
-    fn switch_if_needed(&mut self) -> bool {
-        let _blocker = IntBlocker::new();
-
-        if self.is_switch_needed() {
-            self.switch_to_next();
-            true
-        } else {
-            false
-        }
-    }
-
-    fn terminate_task(&mut self, task: &Task) -> Result<()> {
-        let data = task.data();
-
-        match data.state {
-            State::Runnable => self.remove_task(task.ptr),
-            State::Suspended => self.suspended_tasks.remove(&task.ptr),
-            State::Free => return Err(Error::InvalidState)
-        }
-
-        // ここでは解放しない
-        data.state = State::Free;
-        self.free_tasks.push_back(task.ptr);
-
-        data.terminate();
-
-        Ok(())
-    }
-
-    fn terminate(&mut self, task: &Task) -> Result<()> {
-        let _blocker = IntBlocker::new();
-
-        if !task.is_valid() {
-            return Err(Error::InvalidTask)
-        }
-        if task.is_running() {
-            return Err(Error::InRunning)
-        }
-
-        try!(self.terminate_task(task));
-        self.switch_if_needed();
-
-        Ok(())
-    }
-
-    fn terminated(&mut self) -> ! {
-        debug_log!("Task terminated");
-
-        interrupt::disable();
-        let cur_task = Task::this();
-        let next_task = self.forward_task();
-        assert!(self.terminate_task(&cur_task).is_ok());
-
-        self.reset_timer();
-        unsafe {
-            arch::task::leap(&mut next_task.data().entity);
-        }
     }
 }
 
