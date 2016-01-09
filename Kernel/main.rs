@@ -40,6 +40,8 @@ pub mod rt;
 #[macro_use]
 pub mod lists;
 
+pub mod sync;
+
 // Achitecture-specific modules
 #[cfg(target_arch="x86_64")] #[path="arch/amd64/mod.rs"]
 pub mod arch;
