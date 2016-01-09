@@ -33,7 +33,7 @@ LINKFLAGS += -Map $(OBJDIR)map.txt
 LINKFLAGS += --gc-sections
 LINKFLAGS += -z max-page-size=0x1000
 
-RUSTFLAGS := --color always --cfg arch__$(ARCH) --target=$(TARGETSPEC) --cfg disable_float
+RUSTFLAGS := --cfg arch__$(ARCH) --target=$(TARGETSPEC) --cfg disable_float
 ifeq ($(DEBUG),yes)
     RUSTFLAGS += -g
 else
@@ -53,17 +53,20 @@ LIBCOLLECTIONS := $(OBJDIR)libcollections.rlib
 OBJS := start.o assembly.o kernel.o libcore.rlib liballoc_system.rlib liballoc.rlib librustc_unicode.rlib libcollections.rlib
 OBJS := $(OBJS:%=$(OBJDIR)%)
 BIN := ../kernel.$(ARCH).bin
+DSM := $(BIN).dsm
 GRUB_DIR := ../grub/
 GRUB_CFG := $(GRUB_DIR)boot/grub/grub.cfg
 GRUB_IMG := $(GRUB_DIR)kernel.img
 GRUB_ISO := ../grub.$(ARCH).iso
 
-.PHONY: all clean UPDATE
+.PHONY: all dsm clean UPDATE
 
 all: $(BIN) $(GRUB_ISO)
 
+dsm: $(DSM)
+
 clean:
-	$(RM) -rf $(BIN) $(BIN).dsm $(OBJDIR) $(GRUB_ISO) $(GRUB_IMG)
+	$(RM) -rf $(BIN) $(DSM) $(OBJDIR) $(GRUB_ISO) $(GRUB_IMG)
 
 UPDATE:
 	curl https://static.rust-lang.org/dist/rustc-nightly-src.tar.gz -o ../rustc-nightly-src.tar.gz
@@ -74,7 +77,6 @@ NEWPATCH:
 # Final link command
 $(BIN): $(OBJS) arch/$(ARCH)/link.ld
 	$(LD) -o $@ $(LINKFLAGS) $(OBJS)
-	$(OBJDUMP) -S $@ > $@.dsm
 ifeq ($(ARCH),amd64)
 	@mv $@ $@.elf64
 	@$(OBJCOPY) $@.elf64 -F elf32-i386 $@
@@ -83,6 +85,9 @@ endif
 $(GRUB_ISO): $(BIN) $(GRUB_CFG)
 	cp $(BIN) $(GRUB_IMG)
 	$(MKRESCUE) -o $@ $(GRUB_DIR)
+
+$(DSM): $(BIN)
+	$(OBJDUMP) -S $(BIN) > $@
 
 ../libcore/lib.rs: ../rustc-nightly-src.tar.gz ../libcore_nofp.patch
 	tar -xmf ../rustc-nightly-src.tar.gz -C ../ rustc-nightly/src/libcore --transform 's~^rustc-nightly/src/~~'
