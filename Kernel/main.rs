@@ -16,7 +16,7 @@
 // Unstable language features
 #![feature(associated_consts, const_fn, concat_idents)]
 // Unstable library features
-#![feature(core_intrinsics, zero_one, num_bits_bytes, drop_in_place, fnbox)]
+#![feature(core_intrinsics, num_bits_bytes, drop_in_place, fnbox)]
 #![feature(unique, shared)]
 
 #![cfg_attr(any(target_arch="x86_64", target_arch="x86"), feature(step_by, iter_arith))]
@@ -47,8 +47,6 @@ pub mod sync;
 pub mod arch;
 #[cfg(target_arch="x86")] #[path="arch/x86/mod.rs"]
 pub mod arch;
-
-mod num_traits;
 
 // Exception handling (panic)
 pub mod unwind;
