@@ -1,3 +1,4 @@
+use core::mem;
 use core::cell::UnsafeCell;
 use core::ptr::Shared;
 use core::fmt::{self, Display, Debug};
@@ -16,22 +17,54 @@ impl<T> Force<T> {
     }
 
     #[inline(always)]
-    pub fn setup(&self) -> &mut T {
+    pub fn can_use(&self) -> bool {
         unsafe {
-            &mut *(self.0.get() as *mut T)
+            (*self.0.get()).is_some()
         }
     }
 
     #[inline(always)]
-    pub fn as_ref(&self) -> ForceRef<T> {
+    pub fn setup(&self) -> &mut T {
+        let offset = mem::size_of::<Option<T>>() - mem::size_of::<T>();
+
         unsafe {
-            ForceRef(Shared::new(self.0.get() as *mut T))
+            let ptr = self.0.get();
+            if offset > 0 {
+                *ptr = Some(mem::uninitialized());
+            }
+
+            &mut *((ptr as *mut u8).offset(offset as isize) as *mut T)
+        }
+    }
+
+    #[inline]
+    pub fn as_ref(&self) -> ForceRef<T> {
+        let offset = mem::size_of::<Option<T>>() - mem::size_of::<T>();
+
+        unsafe {
+            ForceRef(Shared::new((self.0.get() as *mut u8).offset(offset as isize) as *mut T))
         }
     }
 }
 
 unsafe impl<T: Send> Send for Force<T> { }
 unsafe impl<T: Sync> Sync for Force<T> { }
+
+impl<T> ForceRef<T> {
+    #[inline(always)]
+    pub fn as_ref(this: ForceRef<T>) -> &'static T {
+        unsafe {
+            &**this.0
+        }
+    }
+
+    #[inline(always)]
+    pub fn as_mut(this: ForceRef<T>) -> &'static mut T {
+        unsafe {
+            &mut **this.0
+        }
+    }
+}
 
 impl<T: PartialEq> PartialEq for ForceRef<T> {
     #[inline(always)]
