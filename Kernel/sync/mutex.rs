@@ -72,7 +72,6 @@ impl PrimitiveMutex {
     pub fn lock(&self) -> LockResult<()> {
         if self.locked.swap(true, Ordering::Acquire) {
             let this_task = task::this();
-            let priority = this_task.priority().unwrap();
 
             let q = unsafe { &mut *self.queue.get() };
             let ticket = q.push(this_task.clone());
@@ -90,8 +89,7 @@ impl PrimitiveMutex {
                     self.locked.store(false, Ordering::Release);
                 } else {
                     if !q.contains(&ticket) {
-                        let _ = this_task.set_priority(priority);// Restore priority
-                        task::yield_now();
+                        task::yield_now();// Back to a task which is destroying a mutex
                         return Err(LockError::Destroyed);
                     }
                 }
@@ -108,7 +106,6 @@ impl PrimitiveMutex {
     pub fn try_lock_for(&self, duration: usize) -> TryLockForResult<()> {
         if self.locked.swap(true, Ordering::Acquire) {
             let this_task = task::this();
-            let priority = this_task.priority().unwrap();
 
             let q = unsafe { &mut *self.queue.get() };
             let ticket = q.push(this_task.clone());
@@ -118,8 +115,7 @@ impl PrimitiveMutex {
 
             if self.locked.swap(true, Ordering::SeqCst) {
                 if !q.contains(&ticket) {
-                    let _ = this_task.set_priority(priority);// Restore priority
-                    task::yield_now();
+                    task::yield_now();// Back to a task which is destroying a mutex
                     return Err(TryLockForError::Destroyed);
                 }
 
@@ -166,8 +162,8 @@ impl PrimitiveMutex {
         self.locked.store(true, Ordering::Release);
         let q = &mut *self.queue.get();
         while let Some(task) = q.pop() {
-            let _ = task.set_priority(task::Priority::Critical);
-            let _ = task.resume();
+            let _ = task.resume_later();
+            let _ = task::run_now(&task);
         }
         task::yield_now();
     }

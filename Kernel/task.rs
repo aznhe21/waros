@@ -237,6 +237,7 @@ struct TaskManager {
     suspended_tasks: DList<TaskData>,
     free_tasks: DList<TaskData>,
     running_task: Task,
+    task_to_back: Option<Task>,
     next_priority: Priority,
     primary_task: Task,
     timer: timer::UnmanagedTimer,
@@ -262,6 +263,7 @@ impl TaskManager {
                 suspended_tasks: DList::new(),
                 free_tasks: DList::new(),
                 running_task: primary_task.clone(),
+                task_to_back: None,
                 next_priority: Task::DEFAULT_PRIORITY,
                 primary_task: primary_task.clone(),
                 timer: timer::UnmanagedTimer::with_callback(TaskManager::switch_by_timer),
@@ -351,13 +353,8 @@ impl TaskManager {
     }
 
     #[inline]
-    fn is_switch_needed(&self) -> bool {
-        self.current_priority() != self.next_priority
-    }
-
-    #[inline]
     fn can_switch(&self) -> bool {
-        self.current_tasks().len() != 1 || self.is_switch_needed()
+        self.task_to_back.is_some() || self.current_tasks().len() != 1 || self.current_priority() != self.next_priority
     }
 
     fn switch_by_timer(_: timer::TimerId) {
@@ -380,26 +377,17 @@ impl TaskManager {
         }
     }
 
-    /// スイッチした場合`true`を返す。
-    fn switch_if_needed(&mut self) -> bool {
-        let _blocker = IntBlocker::new();
-
-        if self.is_switch_needed() {
-            self.switch_to_next();
-            true
-        } else {
-            false
-        }
-    }
-
     // 内部変数を次のタスクに移行し、次のタスクを返す
     fn forward_task(&mut self) -> Task {
-        let next = Task::new(if self.current_priority() != self.next_priority {
-            self.runnable_tasks[self.next_priority as usize].front().unwrap()
+        let next = if let Some(next) = self.task_to_back.take() {
+            next
+        } else if self.current_priority() != self.next_priority {
+            Task::new(self.runnable_tasks[self.next_priority as usize].front().unwrap())
         } else {
             // 次のタスクか最初のタスク
-            LinkedNode::get_next(self.running_task.data()).unwrap_or_else(|| self.current_tasks().front().unwrap())
-        });
+            Task::new(LinkedNode::get_next(self.running_task.data())
+                      .unwrap_or_else(|| self.current_tasks().front().unwrap()))
+        };
 
         debug_assert!(self.running_task != next);
         self.running_task = next;
@@ -415,6 +403,26 @@ impl TaskManager {
         unsafe {
             arch::task::switch(&mut cur_task.data().entity, &mut next_task.data().entity);
         }
+    }
+
+    fn run_now(&mut self, next_task: &Task) -> Result<()> {
+        if !next_task.is_valid() {
+            return Err(Error::InvalidTask);
+        }
+        if next_task.is_running() {
+            return Err(Error::InRunning);
+        }
+
+        self.reset_timer();
+
+        let cur_task = Task::this();
+        self.task_to_back = Some(cur_task.clone());
+        self.running_task = next_task.clone();
+        unsafe {
+            arch::task::switch(&mut cur_task.data().entity, &mut next_task.data().entity);
+        }
+
+        Ok(())
     }
 
     fn terminate_task(&mut self, task: &Task) -> Result<()> {
@@ -447,13 +455,12 @@ impl TaskManager {
 
         let r = self.terminate_task(task);
         debug_assert!(r.is_ok());
-        self.switch_if_needed();
 
         Ok(())
     }
 
     fn terminated(&mut self) -> ! {
-        debug_log!("Task terminated");
+        debug_log!("Terminating task {}", Task::this().id());
 
         interrupt::disable();
 
@@ -566,6 +573,8 @@ impl TaskManager {
     }
 
     fn sleep(&mut self, duration: usize) {
+        let _blocker = IntBlocker::new();
+
         let task = Task::this();
         task.data().timer.reset(duration);
         assert!(task.suspend().is_ok());
@@ -604,10 +613,6 @@ pub fn spawn<F: FnOnce() + Send + 'static>(f: F) -> Task
     let _blocker = IntBlocker::new();
 
     let main = move || {
-        let r = Task::this().set_priority(Task::DEFAULT_PRIORITY);
-        debug_assert!(r.is_ok());
-        manager().switch_if_needed();// Release the execution right
-
         // TODO: catch exceptions
         f();
     };
@@ -617,12 +622,7 @@ pub fn spawn<F: FnOnce() + Send + 'static>(f: F) -> Task
     let task = man.add(spawn_entry, Box::into_raw(Box::new(p)) as usize);
 
     // Switch to the spawning task immediately
-    let r = task.set_priority(Priority::Critical);
-    debug_assert!(r.is_ok());
-    mem::drop(_blocker);
-    if !man.switch_if_needed() {
-        sleep(0);
-    }
+    let _ = man.run_now(&task);
 
     return task;
 
@@ -654,5 +654,10 @@ pub fn sleep(duration: usize) {
 #[inline(always)]
 pub fn yield_now() {
     manager().yield_now();
+}
+
+#[inline(always)]
+pub fn run_now(task: &Task) -> Result<()> {
+    manager().run_now(task)
 }
 
