@@ -116,7 +116,7 @@ pub fn kmain() -> ! {
         arch::interrupt::disable();
         pri_count.1 += 1;
 
-        match event::Event::get() {
+        match event::queue().pop() {
             Some(Event::Device(Device::Keyboard(Keyboard::Down(state)))) => {
                 log!("Key down: {:02X}", state.code);
             },
@@ -195,7 +195,7 @@ pub fn kmain() -> ! {
                     _ => log!("Timer {}", timer_id)
                 }
             },
-            _ => {
+            None => {
                 //arch::interrupt::enable_wait();
                 arch::interrupt::enable();
             }

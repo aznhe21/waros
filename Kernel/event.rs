@@ -3,8 +3,6 @@ use lists::RingBuffer;
 use drivers;
 use timer;
 use core::ops::{Deref, DerefMut};
-use alloc::raw_vec::RawVec;
-use alloc::boxed::Box;
 
 pub enum Event {
     Timer(timer::TimerId),
@@ -30,21 +28,12 @@ impl DerefMut for EventQueue {
 }
 
 static Q: Force<EventQueue> = Force::new();
-
-impl Event {
-    #[inline]
-    pub fn get() -> Option<Event> {
-        queue().pop()
-    }
-}
+static Q_BUF: Force<[Event; 128]> = Force::new();
 
 #[inline]
 pub fn init() {
-    unsafe {
-        let len = 128;
-        let slice: Box<[Event]> = RawVec::with_capacity(len).into_box();
-        *Q.setup() = EventQueue(RingBuffer::new(&mut *Box::into_raw(slice)));
-    }
+    let slice = ForceRef::as_mut(Q_BUF.as_ref());
+    *Q.setup() = EventQueue(RingBuffer::new(slice));
 }
 
 #[inline(always)]
