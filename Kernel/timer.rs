@@ -1,7 +1,6 @@
 use rt::{Force, ForceRef, IntBlocker};
 use lists::{DList, SortedList};
 use event::{Event, EventQueue};
-use core::intrinsics;
 use core::cmp::Ordering;
 use core::iter::FromIterator;
 use core::ptr::Shared;
@@ -53,7 +52,6 @@ impl TimerManager {
     pub fn tick(&mut self, count: usize) {
         unsafe {
             self.counter = self.counter.wrapping_add(count);
-            let mut callbacks = DList::<TimerEntity>::new();
 
             while let Some(timer) = self.ticking_timers.front() {
                 if (**timer).tick > self.counter {
@@ -63,14 +61,10 @@ impl TimerManager {
                 match (**timer).handler {
                     TimerHandler::Unset => unreachable!(),
                     TimerHandler::Queue(ref mut queue) => queue.push(Event::Timer((**timer).id)),
-                    TimerHandler::Callback(_) => callbacks.push_back(timer)
-                }
-            }
-
-            for timer in callbacks.iter() {
-                match (**timer).handler {
-                    TimerHandler::Callback(callback) => callback((**timer).id),
-                    _ => intrinsics::unreachable()
+                    TimerHandler::Callback(cb) => {
+                        cb((**timer).id);
+                        break;
+                    }
                 }
             }
         }
