@@ -1,4 +1,3 @@
-use core::mem;
 use core::ptr;
 
 pub struct RingBuffer<'a, T: 'a> {
@@ -35,43 +34,28 @@ impl<'a, T> RingBuffer<'a, T> {
     #[inline]
     pub fn is_empty(&self) -> bool { self.read == self.write }
 
-    #[inline]
     pub fn push(&mut self, value: T) {
-        unsafe {
-            ptr::write(self.emplace_back(), value);
-        }
-    }
-
-    #[inline]
-    pub fn try_push(&mut self, value: T) -> bool {
-        match self.try_emplace_back() {
-            Some(data) => {
-                unsafe {
-                    ptr::write(data, value);
-                }
-                true
-            },
-            None => false
-        }
-    }
-
-    pub fn emplace_back(&mut self) -> &mut T {
         let cur = self.write;
         self.write = self.step(self.write);
         if self.is_empty() {
             self.read = self.step(self.read);
         }
 
-        &mut self.data[cur]
+        unsafe {
+            ptr::write(&mut self.data[cur], value);
+        }
     }
 
-    pub fn try_emplace_back(&mut self) -> Option<&mut T> {
+    pub fn try_push(&mut self, value: T) -> bool {
         let cur = self.write;
         self.write = self.step(self.write);
         if self.is_empty() {
-            None
+            false
         } else {
-            Some(&mut self.data[cur])
+            unsafe {
+                ptr::write(&mut self.data[cur], value);
+            }
+            true
         }
     }
 
@@ -82,9 +66,9 @@ impl<'a, T> RingBuffer<'a, T> {
             let cur = self.read;
             self.read = self.step(self.read);
 
-            let mut ret: T = unsafe { mem::uninitialized() };
-            mem::swap(&mut self.data[cur], &mut ret);
-            Some(ret)
+            unsafe {
+                Some(ptr::read(&mut self.data[cur]))
+            }
         }
     }
 

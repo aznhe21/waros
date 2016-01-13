@@ -50,7 +50,7 @@ mod keyboard {
                 code if code & 0x80 == 0                             => Keyboard::Down(state.clone()),
                 _                                                    => Keyboard::Up(state.clone()),
             };
-            *event::queue().emplace_back() = Event::Device(Device::Keyboard(key));
+            event::queue().push(Event::Device(Device::Keyboard(key)));
         }
     }
 }
@@ -125,7 +125,7 @@ mod mouse {
                 Stage::Third(flags, x)           => {
                     let y = data as i8;
                     let mouse = Mouse::with_bits(flags, x as i8, -y);
-                    *event::queue().emplace_back() = Event::Device(Device::Mouse(mouse));
+                    event::queue().push(Event::Device(Device::Mouse(mouse)));
                     Stage::First
                 }
             };
