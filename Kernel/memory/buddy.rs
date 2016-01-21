@@ -212,9 +212,14 @@ pub fn manager() -> ForceRef<BuddyManager> {
 }
 
 #[inline(always)]
-pub fn order_by_size(size: usize) -> usize {
+pub fn order_by_size(size: usize) -> Option<usize> {
     debug_assert!(size > 0);
     let nframes = (size + arch::FRAME_SIZE - 1) / arch::FRAME_SIZE;
-    usize::BITS - (nframes - 1).leading_zeros() as usize
+    let order = usize::BITS - (nframes - 1).leading_zeros() as usize;
+    if order >= MAX_ORDER {
+        None
+    } else {
+        Some(order)
+    }
 }
 

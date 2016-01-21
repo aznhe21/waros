@@ -54,16 +54,18 @@ impl KCacheManager {
 
     pub fn allocate(&mut self, size: usize, align: usize) -> *mut u8 {
         let alloc_size = rt::align_up(size + 1, align);
-        buddy::manager().allocate(buddy::order_by_size(alloc_size)).and_then(|page| {
-            let addr = arch::page::table().map_memory(3, 3, page, alloc_size);
-            if addr.is_null() {
-                buddy::manager().free(page);
-                None
-            } else {
-                Some(addr.align_up(align).as_mut_ptr())
-            }
-        })
-        .unwrap_or(ptr::null_mut())
+        buddy::order_by_size(alloc_size)
+            .and_then(|order| buddy::manager().allocate(order))
+            .and_then(|page| {
+                let addr = arch::page::table().map_memory(3, 3, page, alloc_size);
+                if addr.is_null() {
+                    buddy::manager().free(page);
+                    None
+                } else {
+                    Some(addr.align_up(align).as_mut_ptr())
+                }
+            })
+            .unwrap_or(ptr::null_mut())
     }
 
     pub fn reallocate_inplace(&mut self, ptr: *mut u8, size: usize, align: usize) -> usize {
