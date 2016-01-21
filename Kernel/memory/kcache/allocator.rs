@@ -214,23 +214,23 @@ impl<T> KCacheAllocator<T> {
     }
 }
 
+impl<T> fmt::Debug for KCacheAllocator<T> {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Debug::fmt(self.mut_inner(), fmt)
+    }
+}
+
 impl<T> Clone for KCacheAllocator<T> {
-    #[inline(always)]
     fn clone(&self) -> KCacheAllocator<T> {
-        unsafe {
-            (**self.0).rc.fetch_add(1, Ordering::SeqCst);
-        }
+        self.mut_inner().rc.fetch_add(1, Ordering::SeqCst);
         KCacheAllocator(self.0)
     }
 }
 
 impl<T> Drop for KCacheAllocator<T> {
-    #[inline]
     fn drop(&mut self) {
-        unsafe {
-            if (**self.0).rc.fetch_sub(1, Ordering::SeqCst) == 1 {
-                manager().allocator.free(self.0);
-            }
+        if self.mut_inner().rc.fetch_sub(1, Ordering::SeqCst) == 1 {
+            manager().allocator.free(self.0);
         }
     }
 }

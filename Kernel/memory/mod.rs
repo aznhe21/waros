@@ -84,34 +84,34 @@ extern "C" {
 }
 
 #[inline(always)]
-pub unsafe extern "C" fn fill8(ptr: *mut u8, val: u8, size: usize) {
+pub unsafe fn fill8(ptr: *mut u8, val: u8, size: usize) {
     memory_fill8(ptr, val, size);
 }
 
 #[inline(always)]
-pub unsafe extern "C" fn fill16(ptr: *mut u16, val: u16, size: usize) {
+pub unsafe fn fill16(ptr: *mut u16, val: u16, size: usize) {
     memory_fill16(ptr, val, size);
 }
 
 #[inline(always)]
-pub unsafe extern "C" fn fill32(ptr: *mut u32, val: u32, size: usize) {
+pub unsafe fn fill32(ptr: *mut u32, val: u32, size: usize) {
     memory_fill32(ptr, val, size);
 }
 
 #[inline(always)]
-pub unsafe extern "C" fn fill64(ptr: *mut u64, val: u64, size: usize) {
+pub unsafe fn fill64(ptr: *mut u64, val: u64, size: usize) {
     memory_fill64(ptr, val, size);
 }
 
 #[inline(always)]
 #[cfg(target_pointer_width="32")]
-pub unsafe extern "C" fn fillus(ptr: *mut usize, val: usize, size: usize) {
+pub unsafe fn fillus(ptr: *mut usize, val: usize, size: usize) {
     memory_fill32(ptr as *mut u32, val as u32, size);
 }
 
 #[inline(always)]
 #[cfg(target_pointer_width="64")]
-pub unsafe extern "C" fn fillus(ptr: *mut usize, val: usize, size: usize) {
+pub unsafe fn fillus(ptr: *mut usize, val: usize, size: usize) {
     memory_fill64(ptr as *mut u64, val as u64, size);
 }
 
@@ -122,12 +122,20 @@ mod tests {
     #[test]
     fn test_fill() {
         macro_rules! fill {
-            ($t: ty, $val: expr, $fill: path) => ({
-                let mut arr: [$t; 256] = [0; 256];
-                $fill(arr.as_mut_ptr(), $val, arr.len());
-                for &x in arr.iter() {
-                    assert_eq!(x, $val);
-                }
+            ($t: ident, $val: expr, $fill: path) => ({
+                use std::{$t};
+                const LEN: usize = 16 / $t::BYTES;
+                let mut arr: [$t; LEN] = [0; LEN];
+
+                $fill(arr.as_mut_ptr(), 1, 0);
+                assert_eq!(arr, [0; LEN]);
+
+                $fill(arr.as_mut_ptr(), $val, LEN / 2);
+                assert_eq!(arr[0..LEN/2], [$val; LEN/2]);
+                assert_eq!(arr[LEN/2..], [0; LEN/2]);
+
+                $fill(arr.as_mut_ptr(), $val, LEN);
+                assert_eq!(arr, [$val; LEN]);
             })
         }
 
