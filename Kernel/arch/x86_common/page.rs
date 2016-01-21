@@ -134,6 +134,8 @@ pub struct PageTable {
 }
 
 impl PageTable {
+    pub const FLAGS_KERNEL: (u16, u16) = (PageDirectoryEntry::FLAGS_KERNEL, PageTableEntry::FLAGS_KERNEL);
+
     #[inline(always)]
     pub unsafe fn enable() {
         let cr4: u32;
@@ -200,7 +202,7 @@ impl PageTable {
         unsafe { slice::from_raw_parts_mut(self.pd, PageDirectoryEntry::LEN) }
     }
 
-    fn map(&mut self, desc_flags: u16, table_flags: u16, virt_addr: VirtAddr, phys_addr: PhysAddr) {
+    fn map(&mut self, (desc_flags, table_flags): (u16, u16), virt_addr: VirtAddr, phys_addr: PhysAddr) {
         let pde = self.get_pde(virt_addr);
         //assert!(!pde.get_flag_p());
         pde.set_flags(desc_flags);
@@ -210,22 +212,22 @@ impl PageTable {
         pte.set_address(phys_addr);
     }
 
-    fn map_range(&mut self, desc_flags: u16, table_flags: u16, virt_range: Range<VirtAddr>, phys_range: Range<PhysAddr>)
+    fn map_range(&mut self, flags: (u16, u16), virt_range: Range<VirtAddr>, phys_range: Range<PhysAddr>)
     {
         let virt_range = virt_range.start.value() .. virt_range.end.value();
         let phys_range = phys_range.start.value() .. phys_range.end.value();
 
         for (virt_addr, phys_addr) in virt_range.step_by(arch::PAGE_SIZE).zip(phys_range.step_by(FRAME_SIZE_ADDR)) {
-            self.map(desc_flags, table_flags, VirtAddr::from_raw(virt_addr), PhysAddr::from_raw(phys_addr));
+            self.map(flags, VirtAddr::from_raw(virt_addr), PhysAddr::from_raw(phys_addr));
         }
     }
 
-    pub fn map_direct(&mut self, desc_flags: u16, table_flags: u16, phys_range: Range<PhysAddr>) {
+    pub fn map_direct(&mut self, flags: (u16, u16), phys_range: Range<PhysAddr>) {
         assert!(phys_range.end.value() <= usize::MAX as arch::AddrType);
 
         let virt_range = VirtAddr::from_raw(phys_range.start.value() as usize)
             .. VirtAddr::from_raw(phys_range.end.value() as usize);
-        self.map_range(desc_flags, table_flags, virt_range, phys_range);
+        self.map_range(flags, virt_range, phys_range);
     }
 
     fn find_free_addr(&mut self, size: usize) -> VirtAddr {
@@ -255,13 +257,13 @@ impl PageTable {
         VirtAddr::null()
     }
 
-    pub fn map_memory(&mut self, desc_flags: u16, table_flags: u16, page: Shared<PageFrame>, size: usize) -> VirtAddr {
+    pub fn map_memory(&mut self, flags: (u16, u16), page: Shared<PageFrame>, size: usize) -> VirtAddr {
         let virt_addr = self.find_free_addr(size);
         let phys_addr = unsafe { (**page).addr() };
         if !virt_addr.is_null() {
             let virt_range = virt_addr .. virt_addr + size;
             let phys_range = phys_addr .. phys_addr + size as arch::AddrType;
-            self.map_range(desc_flags, table_flags, virt_range, phys_range);
+            self.map_range(flags, virt_range, phys_range);
         }
 
         virt_addr
@@ -283,7 +285,7 @@ pub fn pre_init() {
 #[inline]
 pub fn init() {
     unsafe {
-        kernel_pt.map_range(PageDirectoryEntry::FLAGS_KERNEL, PageTableEntry::FLAGS_KERNEL,
+        kernel_pt.map_range(PageTable::FLAGS_KERNEL,
                             arch::kernel_start() .. memory::kernel::end_addr(),
                             arch::kernel_start().as_phys_addr() .. memory::kernel::end_addr().as_phys_addr());
 

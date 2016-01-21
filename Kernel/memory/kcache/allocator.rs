@@ -57,7 +57,7 @@ impl KCacheManager {
         buddy::order_by_size(alloc_size)
             .and_then(|order| buddy::manager().allocate(order))
             .and_then(|page| {
-                let addr = arch::page::table().map_memory(3, 3, page, alloc_size);
+                let addr = arch::page::table().map_memory(arch::page::PageTable::FLAGS_KERNEL, page, alloc_size);
                 if addr.is_null() {
                     buddy::manager().free(page);
                     None

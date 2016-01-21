@@ -35,7 +35,8 @@ impl Vbe {
         let res = vbe.minfo.h_res as usize * vbe.minfo.v_res as usize;
         let vram = vbe.minfo.phys_base_ptr as arch::AddrType;
         let vram_end = vram + (res * vbe.minfo.bpp as usize) as arch::AddrType;
-        page::table().map_direct(3, 3, PhysAddr::from_raw(vram) .. PhysAddr::from_raw(vram_end));
+        let vram_range = PhysAddr::from_raw(vram) .. PhysAddr::from_raw(vram_end);
+        page::table().map_direct(page::PageTable::FLAGS_KERNEL, vram_range);
 
         vbe
     }
