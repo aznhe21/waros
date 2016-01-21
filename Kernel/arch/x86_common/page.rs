@@ -230,7 +230,7 @@ impl PageTable {
 
     fn find_free_addr(&mut self, size: usize) -> VirtAddr {
         let map_pages = (size + arch::PAGE_SIZE - 1) / arch::PAGE_SIZE;
-        let pde_index = PageTable::get_pde_index(memory::kernel::kernel_memory());
+        let pde_index = PageTable::get_pde_index(memory::kernel::end_addr());
         let mut begin_addr = 0;
         let mut free_pages = 0;
 
@@ -284,8 +284,8 @@ pub fn pre_init() {
 pub fn init() {
     unsafe {
         kernel_pt.map_range(PageDirectoryEntry::FLAGS_KERNEL, PageTableEntry::FLAGS_KERNEL,
-                            arch::kernel_start() .. memory::kernel::kernel_memory(),
-                            arch::kernel_start().as_phys_addr() .. memory::kernel::kernel_memory().as_phys_addr());
+                            arch::kernel_start() .. memory::kernel::end_addr(),
+                            arch::kernel_start().as_phys_addr() .. memory::kernel::end_addr().as_phys_addr());
 
         kernel_pt.reset();
     }

@@ -30,10 +30,10 @@ impl PhysAddr {
     }
 
     pub fn as_virt_addr(&self) -> VirtAddr {
-        if *self <= kernel_memory().as_phys_addr() {
+        if *self <= end_addr().as_phys_addr() {
             VirtAddr::from_raw(self.value() as usize + arch::KERNEL_BASE)
         } else {
-            panic!("as_virt_addr: {:?} > {:?}", self, kernel_memory().as_phys_addr());
+            panic!("as_virt_addr: {:?} > {:?}", self, end_addr().as_phys_addr());
             // phys_addr_to_frame
         }
     }
@@ -62,6 +62,12 @@ impl Sub<arch::AddrType> for PhysAddr {
 
     fn sub(self, rhs: arch::AddrType) -> PhysAddr {
         PhysAddr(self.0 - rhs)
+    }
+}
+
+impl fmt::Pointer for PhysAddr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Pointer::fmt(&(self.value() as *const usize), f)
     }
 }
 
@@ -107,7 +113,7 @@ impl VirtAddr {
 
     #[inline(always)]
     pub fn as_phys_addr(&self) -> PhysAddr {
-        assert!(*self <= kernel_memory(), "Out of kernel space: {:?} > {:?}", self, kernel_memory());
+        assert!(*self <= end_addr(), "Out of kernel space: {:?} > {:?}", self, end_addr());
         PhysAddr((self.value() - arch::KERNEL_BASE) as arch::AddrType)
     }
 
@@ -148,65 +154,64 @@ impl Sub<usize> for VirtAddr {
     }
 }
 
+impl fmt::Pointer for VirtAddr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Pointer::fmt(&(self.value() as *const usize), f)
+    }
+}
+
 impl fmt::Debug for VirtAddr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         fmt::Pointer::fmt(&(self.value() as *const usize), f)
     }
 }
 
-enum KernelMemory {
+enum PreHeap {
     Uninit,
     Available(VirtAddr),
-    End(VirtAddr)
+    Post(VirtAddr)
 }
 
-impl KernelMemory {
-    #[inline(always)]
-    pub fn addr(&self) -> VirtAddr {
-        match *self {
-            KernelMemory::Uninit => VirtAddr::null(),
-            KernelMemory::Available(address) => address,
-            KernelMemory::End(address) => address
-        }
-    }
-}
-
-static mut memory: KernelMemory = KernelMemory::Uninit;
+static mut memory: PreHeap = PreHeap::Uninit;
 
 #[inline]
 pub fn pre_init() {
     unsafe {
-        memory = KernelMemory::Available(arch::kernel_end());
+        memory = PreHeap::Available(arch::kernel_end());
+    }
+}
+
+pub fn end_addr() -> VirtAddr {
+    unsafe {
+        match memory {
+            PreHeap::Uninit => VirtAddr::null(),
+            PreHeap::Available(address) | PreHeap::Post(address) => address
+        }
     }
 }
 
 #[inline(always)]
-pub fn kernel_memory() -> VirtAddr {
-    unsafe { memory.addr() }
-}
-
-#[inline(always)]
-pub fn memory_end() -> VirtAddr {
+pub fn done() -> VirtAddr {
     unsafe {
         match memory {
-            KernelMemory::Uninit => panic!("Uninitialized"),
-            KernelMemory::Available(addr) => {
+            PreHeap::Uninit => panic!("Uninitialized"),
+            PreHeap::Available(addr) => {
                 let addr = addr.align_up(arch::FRAME_SIZE);
-                memory = KernelMemory::End(addr);
+                memory = PreHeap::Post(addr);
                 addr
             },
-            KernelMemory::End(_) => panic!("Already ended")
+            PreHeap::Post(_) => panic!("Already done")
         }
     }
 }
 
 pub unsafe fn allocate_raw(size: usize, align: usize) -> *mut u8 {
-    if let KernelMemory::Available(addr) = memory {
+    if let PreHeap::Available(addr) = memory {
         let addr = addr.align_up(align);
-        memory = KernelMemory::Available(addr + size);
+        memory = PreHeap::Available(addr + size);
         addr.as_mut_ptr()
     } else {
-        panic!("Unable to allocate after kernel space");
+        panic!("You can use the standard memory allocations");
     }
 }
 

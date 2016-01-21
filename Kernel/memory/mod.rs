@@ -1,3 +1,4 @@
+use self::kernel::{PhysAddr, VirtAddr};
 use arch;
 use arch::page;
 use core::intrinsics;
@@ -37,10 +38,10 @@ fn init_by_frames<F: FnOnce(&mut [buddy::PageFrame])>(len: usize, init_frames: F
 
 pub fn init_by_manual(start: usize, end: usize) {
     init_by_frames((end - start) / arch::FRAME_SIZE, |frames| {
-        let kernel_end = kernel::memory_end().as_phys_addr().value();
+        let kernel_end = kernel::end_addr().as_phys_addr().value();
         for (i, frame) in frames.iter_mut().enumerate() {
             let addr = (start + i * arch::FRAME_SIZE) as u64;
-            *frame = buddy::PageFrame::new(kernel::PhysAddr::from_raw(addr), addr <= kernel_end);
+            *frame = buddy::PageFrame::new(PhysAddr::from_raw(addr), addr <= kernel_end);
         }
     });
 }
@@ -73,10 +74,10 @@ pub fn init_by_detection(max_addr: *mut usize) {
         let len = (ptr as usize - kernel_start) / arch::FRAME_SIZE;
 
         init_by_frames(len, |frames| {
-            let kernel_end = kernel::memory_end().as_phys_addr().value();
+            let kernel_end = kernel::end_addr().as_phys_addr().value();
             for (i, frame) in frames.iter_mut().enumerate() {
                 let addr = (kernel_start + i * arch::FRAME_SIZE) as u64;
-                *frame = buddy::PageFrame::new(kernel::PhysAddr::from_raw(addr), addr <= kernel_end);
+                *frame = buddy::PageFrame::new(PhysAddr::from_raw(addr), addr <= kernel_end);
             }
         });
     }
@@ -90,12 +91,12 @@ pub fn init_by_multiboot(mmap: &[multiboot::MemoryMap]) {
         .sum::<usize>();
 
     init_by_frames(len, |frames| {
-        let kernel_end = kernel::memory_end().as_phys_addr().value();
+        let kernel_end = kernel::end_addr().as_phys_addr().value();
         let mut i = 0;
         for region in mmap.iter().filter(|region| region.type_ == multiboot::MemoryType::Usable) {
             let base_addr_end = region.base_addr + (region.length & !(arch::FRAME_SIZE as u64 - 1));
             for addr in (region.base_addr .. base_addr_end).step_by(arch::FRAME_SIZE as u64) {
-                frames[i] = buddy::PageFrame::new(kernel::PhysAddr::from_raw(addr), addr <= kernel_end);
+                frames[i] = buddy::PageFrame::new(PhysAddr::from_raw(addr), addr <= kernel_end);
                 i += 1;
             }
         }
