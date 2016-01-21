@@ -14,7 +14,7 @@ SECTIONS {
 
 	. += KERNEL_BASE;
 
-	__kernel_start = .;
+	__kernel_start = . - SIZEOF(.init) - SIZEOF_HEADERS;
 
 	.text ALIGN(0x1000) : AT(ADDR(.text) - KERNEL_BASE) {
 		*(.text .text.*)

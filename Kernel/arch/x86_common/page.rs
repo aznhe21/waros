@@ -285,9 +285,10 @@ pub fn pre_init() {
 #[inline]
 pub fn init() {
     unsafe {
+        let memory_start = PhysAddr::from_raw(0).as_virt_addr();
         kernel_pt.map_range(PageTable::FLAGS_KERNEL,
-                            arch::kernel_start() .. memory::kernel::end_addr(),
-                            arch::kernel_start().as_phys_addr() .. memory::kernel::end_addr().as_phys_addr());
+                            memory_start .. memory::kernel::end_addr(),
+                            memory_start.as_phys_addr() .. memory::kernel::end_addr().as_phys_addr());
 
         kernel_pt.reset();
     }

@@ -58,7 +58,7 @@ extern {
 #[inline(always)]
 pub fn kernel_start() -> VirtAddr {
     let addr = &__kernel_start as *const u8 as usize;
-    VirtAddr::from_raw(addr - 0x00100000)
+    VirtAddr::from_raw(addr)
 }
 
 #[inline(always)]
