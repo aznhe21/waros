@@ -3,7 +3,7 @@ use arch;
 use core::mem;
 use core::fmt;
 use core::ptr::{self, Unique};
-use core::ops::{Add, Sub};
+use core::ops::{Add, AddAssign, Sub, SubAssign};
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct PhysAddr(arch::AddrType);
@@ -52,16 +52,32 @@ impl PhysAddr {
 impl Add<arch::AddrType> for PhysAddr {
     type Output = PhysAddr;
 
+    #[inline(always)]
     fn add(self, rhs: arch::AddrType) -> PhysAddr {
         PhysAddr(self.0 + rhs)
+    }
+}
+
+impl AddAssign<arch::AddrType> for PhysAddr {
+    #[inline(always)]
+    fn add_assign(&mut self, rhs: arch::AddrType) {
+        self.0 += rhs;
     }
 }
 
 impl Sub<arch::AddrType> for PhysAddr {
     type Output = PhysAddr;
 
+    #[inline(always)]
     fn sub(self, rhs: arch::AddrType) -> PhysAddr {
         PhysAddr(self.0 - rhs)
+    }
+}
+
+impl SubAssign<arch::AddrType> for PhysAddr {
+    #[inline(always)]
+    fn sub_assign(&mut self, rhs: arch::AddrType) {
+        self.0 -= rhs;
     }
 }
 
@@ -141,16 +157,32 @@ impl VirtAddr {
 impl Add<usize> for VirtAddr {
     type Output = VirtAddr;
 
+    #[inline(always)]
     fn add(self, rhs: usize) -> VirtAddr {
         VirtAddr(self.0 + rhs)
+    }
+}
+
+impl AddAssign<usize> for VirtAddr {
+    #[inline(always)]
+    fn add_assign(&mut self, rhs: usize) {
+        self.0 += rhs;
     }
 }
 
 impl Sub<usize> for VirtAddr {
     type Output = VirtAddr;
 
+    #[inline(always)]
     fn sub(self, rhs: usize) -> VirtAddr {
         VirtAddr(self.0 - rhs)
+    }
+}
+
+impl SubAssign<usize> for VirtAddr {
+    #[inline(always)]
+    fn sub_assign(&mut self, rhs: usize) {
+        self.0 -= rhs;
     }
 }
 

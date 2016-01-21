@@ -1,4 +1,4 @@
-use self::kernel::{PhysAddr, VirtAddr};
+use self::kernel::PhysAddr;
 use arch;
 use arch::page;
 use core::intrinsics;
