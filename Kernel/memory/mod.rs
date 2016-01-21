@@ -1,4 +1,3 @@
-use rt;
 use arch;
 use arch::page;
 use core::intrinsics;
@@ -48,7 +47,7 @@ pub fn init_by_manual(start: usize, end: usize) {
 
 pub fn init_by_detection(max_addr: *mut usize) {
     unsafe {
-        let mut ptr = rt::align_up_mut_ptr(arch::kernel_end().as_mut_ptr::<usize>(), arch::FRAME_SIZE);
+        let mut ptr = arch::kernel_end().align_up(arch::FRAME_SIZE).as_mut_ptr::<usize>();
 
         loop {
             let old = intrinsics::volatile_load(ptr);

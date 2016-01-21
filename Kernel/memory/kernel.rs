@@ -37,6 +37,16 @@ impl PhysAddr {
             // phys_addr_to_frame
         }
     }
+
+    #[inline(always)]
+    pub fn align_up(&self, align: arch::AddrType) -> PhysAddr {
+        PhysAddr(rt::align_up(self.0, align))
+    }
+
+    #[inline(always)]
+    pub fn align_down(&self, align: arch::AddrType) -> PhysAddr {
+        PhysAddr(rt::align_down(self.0, align))
+    }
 }
 
 impl Add<arch::AddrType> for PhysAddr {
@@ -110,6 +120,16 @@ impl VirtAddr {
     pub const fn as_mut_ptr<T>(&self) -> *mut T {
         self.value() as *mut T
     }
+
+    #[inline(always)]
+    pub fn align_up(&self, align: usize) -> VirtAddr {
+        VirtAddr(rt::align_up(self.0, align))
+    }
+
+    #[inline(always)]
+    pub fn align_down(&self, align: usize) -> VirtAddr {
+        VirtAddr(rt::align_down(self.0, align))
+    }
 }
 
 impl Add<usize> for VirtAddr {
@@ -170,8 +190,8 @@ pub fn memory_end() -> VirtAddr {
     unsafe {
         match memory {
             KernelMemory::Uninit => panic!("Uninitialized"),
-            KernelMemory::Available(address) => {
-                let addr = VirtAddr::from_raw(rt::align_up(address.value(), arch::FRAME_SIZE));
+            KernelMemory::Available(addr) => {
+                let addr = addr.align_up(arch::FRAME_SIZE);
                 memory = KernelMemory::End(addr);
                 addr
             },
@@ -181,16 +201,16 @@ pub fn memory_end() -> VirtAddr {
 }
 
 pub unsafe fn allocate_raw(size: usize, align: usize) -> *mut u8 {
-    if let KernelMemory::Available(VirtAddr(old_addr)) = memory {
-        let addr = rt::align_up(old_addr, align);
-
-        memory = KernelMemory::Available(VirtAddr::from_raw(addr + size));
-        addr as *mut u8
+    if let KernelMemory::Available(addr) = memory {
+        let addr = addr.align_up(align);
+        memory = KernelMemory::Available(addr + size);
+        addr.as_mut_ptr()
     } else {
         panic!("Unable to allocate after kernel space");
     }
 }
 
+#[inline]
 pub unsafe fn allocate_uninit<T>() -> Unique<T> {
     Unique::new(allocate_raw(mem::size_of::<T>(), mem::align_of::<T>()) as *mut T)
 }

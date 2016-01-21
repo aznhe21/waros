@@ -60,7 +60,7 @@ impl KCacheManager {
                 buddy::manager().free(page);
                 None
             } else {
-                Some(rt::align_up_mut_ptr(addr.as_mut_ptr(), align))
+                Some(addr.align_up(align).as_mut_ptr())
             }
         })
         .unwrap_or(ptr::null_mut())
