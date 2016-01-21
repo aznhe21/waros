@@ -2,10 +2,12 @@ use arch;
 use memory;
 use memory::buddy::PageFrame;
 use memory::kernel::{PhysAddr, VirtAddr};
-use core::ops;
+use core::ops::Range;
 use core::slice;
 use core::ptr::{self, Shared};
 use core::{u32, usize};
+
+const FRAME_SIZE_ADDR: arch::AddrType = arch::FRAME_SIZE as arch::AddrType;
 
 // TODO: Support PAE
 struct PageDirectoryEntry(u32);
@@ -32,7 +34,7 @@ impl PageDirectoryEntry {
 
     #[inline(always)]
     pub fn page_table(&mut self) -> *mut PageTableEntry {
-        PhysAddr::from_raw((self.0 & 0xFFFFF000) as u64).as_virt_addr().as_mut_ptr()
+        PhysAddr::from_raw((self.0 & 0xFFFFF000) as arch::AddrType).as_virt_addr().as_mut_ptr()
     }
 
     #[inline]
@@ -73,7 +75,7 @@ impl PageDirectoryEntry {
 
     #[inline(always)]
     pub fn get_address(&self) -> PhysAddr {
-        PhysAddr::from_raw(self.get_raw_address() as u64)
+        PhysAddr::from_raw(self.get_raw_address() as arch::AddrType)
     }
 
     #[inline(always)]
@@ -117,7 +119,7 @@ impl PageTableEntry {
 
     #[inline(always)]
     pub fn get_address(&self) -> PhysAddr {
-        PhysAddr::from_raw(self.get_raw_address() as u64)
+        PhysAddr::from_raw(self.get_raw_address() as arch::AddrType)
     }
 
     #[inline(always)]
@@ -198,7 +200,7 @@ impl PageTable {
         unsafe { slice::from_raw_parts_mut(self.pd, PageDirectoryEntry::LEN) }
     }
 
-    pub fn map(&mut self, desc_flags: u16, table_flags: u16, virt_addr: VirtAddr, phys_addr: PhysAddr) {
+    fn map(&mut self, desc_flags: u16, table_flags: u16, virt_addr: VirtAddr, phys_addr: PhysAddr) {
         let pde = self.get_pde(virt_addr);
         //assert!(!pde.get_flag_p());
         pde.set_flags(desc_flags);
@@ -208,25 +210,22 @@ impl PageTable {
         pte.set_address(phys_addr);
     }
 
-    pub fn map_range(&mut self, desc_flags: u16, table_flags: u16, virt_range: ops::Range<VirtAddr>,
-                     phys_range: ops::Range<PhysAddr>)
+    fn map_range(&mut self, desc_flags: u16, table_flags: u16, virt_range: Range<VirtAddr>, phys_range: Range<PhysAddr>)
     {
-        let virt_addr_range = virt_range.start.value() .. virt_range.end.value();
-        let phys_addr_range = phys_range.start.value() .. phys_range.end.value();
+        let virt_range = virt_range.start.value() .. virt_range.end.value();
+        let phys_range = phys_range.start.value() .. phys_range.end.value();
 
-        for (vaddr, paddr) in virt_addr_range.step_by(arch::PAGE_SIZE)
-            .zip(phys_addr_range.step_by(arch::FRAME_SIZE as u64))
-        {
-            self.map(desc_flags, table_flags, VirtAddr::from_raw(vaddr), PhysAddr::from_raw(paddr));
+        for (virt_addr, phys_addr) in virt_range.step_by(arch::PAGE_SIZE).zip(phys_range.step_by(FRAME_SIZE_ADDR)) {
+            self.map(desc_flags, table_flags, VirtAddr::from_raw(virt_addr), PhysAddr::from_raw(phys_addr));
         }
     }
 
-    pub fn map_direct(&mut self, desc_flags: u16, table_flags: u16, addr_range: ops::Range<PhysAddr>) {
-        assert!(addr_range.start.value() <= usize::MAX as u64 && addr_range.end.value() <= usize::MAX as u64);
+    pub fn map_direct(&mut self, desc_flags: u16, table_flags: u16, phys_range: Range<PhysAddr>) {
+        assert!(phys_range.end.value() <= usize::MAX as arch::AddrType);
 
-        let virt_addr_range = VirtAddr::from_raw(addr_range.start.value() as usize)
-            .. VirtAddr::from_raw(addr_range.end.value() as usize);
-        self.map_range(desc_flags, table_flags, virt_addr_range, addr_range);
+        let virt_range = VirtAddr::from_raw(phys_range.start.value() as usize)
+            .. VirtAddr::from_raw(phys_range.end.value() as usize);
+        self.map_range(desc_flags, table_flags, virt_range, phys_range);
     }
 
     fn find_free_addr(&mut self, size: usize) -> VirtAddr {
@@ -261,9 +260,10 @@ impl PageTable {
         let phys_addr = unsafe { (**page).addr() };
         if !virt_addr.is_null() {
             let virt_range = virt_addr .. virt_addr + size;
-            let phys_range = phys_addr .. phys_addr + size as u64;
+            let phys_range = phys_addr .. phys_addr + size as arch::AddrType;
             self.map_range(desc_flags, table_flags, virt_range, phys_range);
         }
+
         virt_addr
     }
 }

@@ -5,12 +5,12 @@ use core::fmt;
 use core::ptr::{self, Unique};
 use core::ops::{Add, Sub};
 
-#[derive(Clone, Copy, PartialEq, PartialOrd)]
-pub struct PhysAddr(u64);
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct PhysAddr(arch::AddrType);
 
 impl PhysAddr {
     #[inline(always)]
-    pub const fn from_raw(addr: u64) -> PhysAddr {
+    pub const fn from_raw(addr: arch::AddrType) -> PhysAddr {
         PhysAddr(addr)
     }
 
@@ -20,7 +20,7 @@ impl PhysAddr {
     }
 
     #[inline(always)]
-    pub const fn value(&self) -> u64 {
+    pub const fn value(&self) -> arch::AddrType {
         self.0
     }
 
@@ -39,18 +39,18 @@ impl PhysAddr {
     }
 }
 
-impl Add<u64> for PhysAddr {
+impl Add<arch::AddrType> for PhysAddr {
     type Output = PhysAddr;
 
-    fn add(self, rhs: u64) -> PhysAddr {
+    fn add(self, rhs: arch::AddrType) -> PhysAddr {
         PhysAddr(self.0 + rhs)
     }
 }
 
-impl Sub<u64> for PhysAddr {
+impl Sub<arch::AddrType> for PhysAddr {
     type Output = PhysAddr;
 
-    fn sub(self, rhs: u64) -> PhysAddr {
+    fn sub(self, rhs: arch::AddrType) -> PhysAddr {
         PhysAddr(self.0 - rhs)
     }
 }
@@ -61,7 +61,7 @@ impl fmt::Debug for PhysAddr {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct VirtAddr(usize);
 
 impl VirtAddr {
@@ -98,7 +98,7 @@ impl VirtAddr {
     #[inline(always)]
     pub fn as_phys_addr(&self) -> PhysAddr {
         assert!(*self <= kernel_memory(), "Out of kernel space: {:?} > {:?}", self, kernel_memory());
-        PhysAddr((self.value() - arch::KERNEL_BASE) as u64)
+        PhysAddr((self.value() - arch::KERNEL_BASE) as arch::AddrType)
     }
 
     #[inline(always)]

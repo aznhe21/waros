@@ -47,6 +47,8 @@ pub const PAGE_SIZE: usize = 0x1000;
 pub const FRAME_SIZE: usize = 0x1000;
 pub const KERNEL_BASE: usize = 0xC0000000;
 
+pub type AddrType = u64;
+
 extern {
     static __kernel_start: u8;
     static __kernel_end: u8;
