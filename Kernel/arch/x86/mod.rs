@@ -11,6 +11,7 @@
  */
 #![allow(dead_code)]
 
+pub use self::multiboot::init_memory;
 use memory;
 use memory::kernel::VirtAddr;
 use core::fmt::Write;
@@ -93,7 +94,6 @@ pub fn x86_init() {
     log!("WARos: Switched to protected mode");
 
     multiboot::init();
-    memory::init_by_multiboot(multiboot::info().mmap().expect("Memory map not provided"));
 }
 
 pub fn print_backtrace() {

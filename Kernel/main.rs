@@ -19,7 +19,7 @@
 #![feature(core_intrinsics, zero_one, num_bits_bytes, op_assign_traits, drop_in_place, fnbox)]
 #![feature(unique, shared)]
 
-#![cfg_attr(any(target_arch="x86_64", target_arch="x86"), feature(step_by, iter_arith))]
+#![cfg_attr(any(target_arch="x86_64", target_arch="x86"), feature(step_by))]
 
 #![no_std]
 #![no_builtins]
@@ -74,6 +74,10 @@ pub fn kmain() -> ! {
     use drivers::Device;
     use drivers::display::{Color, Display, DisplaySize};
     use drivers::keyboard::Keyboard;
+
+    arch::init_memory();
+    //memory::init_by_manual(arch::kernel_end().as_phys_addr() .. arch::kernel_end().as_phys_addr() + 0x1000000);// 16MB
+    //memory::init_by_detection(memory::MAX_ADDR);
 
     event::init();
     timer::init();

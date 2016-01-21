@@ -1,5 +1,7 @@
 use rt;
 use arch;
+use memory;
+use memory::kernel::PhysAddr;
 use core::mem;
 use core::slice;
 use core::str;
@@ -54,6 +56,19 @@ pub fn init() {
     info.apm_table += arch::KERNEL_BASE as u32;
     info.vbe_controller_info += arch::KERNEL_BASE as u32;
     info.vbe_mode_info += arch::KERNEL_BASE as u32;
+}
+
+#[inline]
+pub fn init_memory() {
+    let kernel_start = arch::kernel_start().as_phys_addr().value();
+    let c = |region: &&MemoryMap| {
+        region.type_ == MemoryType::Usable && region.base_addr >= kernel_start
+    };
+    let mmap = info().mmap().expect("Memory map not provided").iter().filter(&c);
+    memory::init_by_iter(
+        mmap.clone().fold(0, |size, region| size + region.length),
+        mmap.map(|region| PhysAddr::from_raw(region.base_addr) .. PhysAddr::from_raw(region.base_addr + region.length))
+    );
 }
 
 #[repr(C, packed)]

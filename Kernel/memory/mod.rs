@@ -2,105 +2,62 @@ use self::kernel::PhysAddr;
 use arch;
 use arch::page;
 use core::intrinsics;
-use core::mem;
-use core::slice;
-use core::usize;
-
-#[cfg(any(target_arch="x86_64", target_arch="x86"))]
-use arch::multiboot;
+use core::iter;
+use core::ops::Range;
 
 pub mod rust;
 pub mod kernel;
 pub mod buddy;
 pub mod kcache;
 
-pub const MAX_ADDR: *mut usize = usize::MAX as *mut usize;
+pub const MAX_ADDR: PhysAddr = PhysAddr::from_raw(arch::AddrType::max_value());
 
 #[inline]
 pub fn pre_init() {
     kernel::pre_init();
 }
 
-fn init_by_frames<F: FnOnce(&mut [buddy::PageFrame])>(len: usize, init_frames: F) {
-    let frames = unsafe {
-        slice::from_raw_parts_mut(kernel::allocate_raw(
-            mem::size_of::<buddy::PageFrame>() * len,
-            mem::align_of::<buddy::PageFrame>()
-        ) as *mut buddy::PageFrame, len)
-    };
-    init_frames(frames);
-
-    buddy::init_by_frames(frames);
+pub fn init_by_iter<I: Iterator<Item=Range<PhysAddr>>>(size: arch::AddrType, f: I) {
+    buddy::init_by_iter(size, f);
     kcache::init();
 
     page::init();
 }
 
-pub fn init_by_manual(start: usize, end: usize) {
-    init_by_frames((end - start) / arch::FRAME_SIZE, |frames| {
-        let kernel_end = kernel::end_addr().as_phys_addr().value();
-        for (i, frame) in frames.iter_mut().enumerate() {
-            let addr = (start + i * arch::FRAME_SIZE) as u64;
-            *frame = buddy::PageFrame::new(PhysAddr::from_raw(addr), addr <= kernel_end);
-        }
-    });
+#[inline(always)]
+pub fn init_by_manual(range: Range<PhysAddr>) {
+    init_by_iter(range.end.value() - range.start.value(), iter::once(range));
 }
 
-pub fn init_by_detection(max_addr: *mut usize) {
-    unsafe {
-        let mut ptr = arch::kernel_end().align_up(arch::FRAME_SIZE).as_mut_ptr::<usize>();
+pub unsafe fn init_by_detection(max_addr: PhysAddr) {
+    let max_addr = max_addr.as_virt_addr();
+    let mut addr = arch::kernel_end().align_up(arch::FRAME_SIZE);
 
-        loop {
-            let old = intrinsics::volatile_load(ptr);
-            let new = old ^ usize::MAX;
+    loop {
+        let ptr_us: *mut usize = addr.as_mut_ptr();
+        let old = intrinsics::volatile_load(ptr_us);
+        let new = !old;
 
-            // 適当な値を入れてみて、その値が読み出せなければメモリ範囲外
-            intrinsics::volatile_store(ptr, new);
-            if intrinsics::volatile_load(ptr) != new {
-                break;
-            }
-
-            // 元に戻す
-            intrinsics::volatile_store(ptr, old);
-
-            if ptr >= max_addr {
-                break;
-            }
-
-            ptr = ptr.offset(arch::PAGE_SIZE as isize);
+        // 適当な値を入れてみて、その値が読み出せなければメモリ範囲外
+        intrinsics::volatile_store(ptr_us, new);
+        if intrinsics::volatile_load(ptr_us) != new {
+            break;
         }
 
-        let kernel_start = arch::kernel_start().as_phys_addr().value() as usize;
-        let len = (ptr as usize - kernel_start) / arch::FRAME_SIZE;
+        // 元に戻す
+        intrinsics::volatile_store(ptr_us, old);
 
-        init_by_frames(len, |frames| {
-            let kernel_end = kernel::end_addr().as_phys_addr().value();
-            for (i, frame) in frames.iter_mut().enumerate() {
-                let addr = (kernel_start + i * arch::FRAME_SIZE) as u64;
-                *frame = buddy::PageFrame::new(PhysAddr::from_raw(addr), addr <= kernel_end);
-            }
-        });
+        if addr >= max_addr {
+            break;
+        }
+
+        addr += arch::PAGE_SIZE;
     }
-}
 
-#[cfg(any(target_arch="x86_64", target_arch="x86"))]
-pub fn init_by_multiboot(mmap: &[multiboot::MemoryMap]) {
-    let len = mmap.iter()
-        .filter(|region| region.type_ == multiboot::MemoryType::Usable)
-        .map(|region| (region.length / arch::FRAME_SIZE as u64) as usize)
-        .sum::<usize>();
+    let range = arch::kernel_start().as_phys_addr() .. addr.as_phys_addr();
+    debug_log!("Memory detected: {:?}", range);
 
-    init_by_frames(len, |frames| {
-        let kernel_end = kernel::end_addr().as_phys_addr().value();
-        let mut i = 0;
-        for region in mmap.iter().filter(|region| region.type_ == multiboot::MemoryType::Usable) {
-            let base_addr_end = region.base_addr + (region.length & !(arch::FRAME_SIZE as u64 - 1));
-            for addr in (region.base_addr .. base_addr_end).step_by(arch::FRAME_SIZE as u64) {
-                frames[i] = buddy::PageFrame::new(PhysAddr::from_raw(addr), addr <= kernel_end);
-                i += 1;
-            }
-        }
-    });
+    init_by_manual(range);
 }
 
 #[inline]
@@ -114,22 +71,8 @@ pub fn free_size() -> u64 {
 }
 
 #[inline(always)]
-pub fn check_oom_ptr<T>(ptr: *mut T) -> *mut T {
-    assert!(!ptr.is_null(), "Out of memory");
-    ptr
-}
-
-#[inline(always)]
-pub fn check_oom<T>(ptr: *mut T) -> &'static mut T {
-    unsafe { &mut *check_oom_ptr(ptr) }
-}
-
-#[inline(always)]
 pub fn check_oom_opt<T>(opt: Option<T>) -> T {
-    match opt {
-        Some(val) => val,
-        None => panic!("Out of memory")
-    }
+    opt.expect("Out of memory")
 }
 
 #[allow(improper_ctypes)]

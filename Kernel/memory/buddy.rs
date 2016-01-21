@@ -1,12 +1,16 @@
 use rt::{IterHelper, Force, ForceRef};
 use arch;
-use super::kernel::PhysAddr;
+use super::kernel::{self, PhysAddr};
 use lists::DList;
 use core::cmp;
+use core::mem;
+use core::slice;
 use core::usize;
+use core::ops::Range;
 use core::ptr::Shared;
 
 const MAX_ORDER: usize = 11;
+const FRAME_SIZE_ADDR: arch::AddrType = arch::FRAME_SIZE as arch::AddrType;
 
 pub struct BuddyManager {
     frames: &'static mut [PageFrame],
@@ -17,28 +21,66 @@ unsafe impl Send for BuddyManager { }
 unsafe impl Sync for BuddyManager { }
 
 impl BuddyManager {
-    #[inline(always)]
-    fn init(&mut self, frames: &'static mut [PageFrame]) {
-        self.frames = frames;
-        for order in self.orders.iter_mut() {
-            *order = DList::new();
+    fn init<I: Iterator<Item=Range<PhysAddr>>>(&mut self, size: arch::AddrType, f: I) {
+        let len = (size / FRAME_SIZE_ADDR) as usize;
+
+        self.frames = unsafe {
+            slice::from_raw_parts_mut(kernel::allocate_raw(
+                mem::size_of::<PageFrame>() * len,
+                mem::align_of::<PageFrame>()
+            ) as *mut PageFrame, len)
+        };
+        let kernel_end = kernel::done().as_phys_addr();
+
+        let f = f.filter_map(|range| {
+            // カーネル領域は使えない
+            let start = cmp::max(range.start.align_up(FRAME_SIZE_ADDR), kernel_end);
+            let end = range.end.align_down(FRAME_SIZE_ADDR);
+
+            // 1フレームに満たないなら無視
+            if start + FRAME_SIZE_ADDR > end {
+                None
+            } else {
+                // 開始アドレスとブロックの大きさ
+                Some((start, ((end.value() - start.value()) / FRAME_SIZE_ADDR) as usize))
+            }
+        });
+
+        for frames in self.orders.iter_mut() {
+            *frames = DList::new();
         }
 
-        let order = cmp::min(MAX_ORDER - 1, usize::BITS - (self.frames.len() - 1).leading_zeros() as usize);
+        let mut total = 0;
+        let mut i = 0;
+        for (mut addr, mut nframes) in f {
+            total += nframes;
 
-        let mut idx = 0;
-        let mut cur_len = self.frames.len();
-        let mut frame_len = 1 << order;
-        for cur_order in (0 .. order + 1).rev() {
-            while cur_len >= frame_len {
-                let frame = &mut self.frames[idx];
-                frame.order = cur_order;
-                self.orders[cur_order].push_front(unsafe { Shared::new(frame) });
+            let order = cmp::min(MAX_ORDER - 1, usize::BITS - (nframes - 1).leading_zeros() as usize);
+            let mut len = 1 << order;
 
-                idx += frame_len;
-                cur_len -= frame_len;
+            for order in (0 .. order + 1).rev() {
+                while nframes >= len {
+                    // PageFrameを初期化し、オーダーを設定する
+                    let top_index = i;
+                    let end = i + len;
+                    while i < end {
+                        self.frames[i] = PageFrame::new(addr, false);
+                        addr += FRAME_SIZE_ADDR;
+                        i += 1;
+                    }
+
+                    self.frames[top_index].order = order;
+                    self.orders[order].push_front(unsafe { Shared::new(&mut self.frames[top_index]) });
+
+                    nframes -= len;
+                }
+                len >>= 1;
             }
-            frame_len >>= 1;
+        }
+
+        // [PageFrame]を確保して減った分のページを埋める
+        for frame in &mut self.frames[total..] {
+            *frame = PageFrame::new(PhysAddr::null(), true);
         }
     }
 
@@ -51,10 +93,11 @@ impl BuddyManager {
             .map(|(matched_order, frame)| {
                 unsafe {
                     // 分割
-                    for cur_order in (order .. matched_order).rev() {
-                        let new_frame = (**frame).divide_into(cur_order);
-                        (*new_frame).order = cur_order;
-                        self.orders[cur_order].push_front(Shared::new(new_frame));
+                    for div_order in (order .. matched_order).rev() {
+                        let div_frame = (**frame).divide_into(div_order);
+                        (*div_frame).using = false;
+                        (*div_frame).order = div_order;
+                        self.orders[div_order].push_front(Shared::new(div_frame));
                     }
 
                     (**frame).using = true;
@@ -76,15 +119,19 @@ impl BuddyManager {
             let mut order = (**frame).order;
 
             while order < MAX_ORDER {
-                let count = 1 << order;
-                let buddy = &mut self.frames[top_index ^ count];
+                let len = 1 << order;
+                let buddy_index = top_index ^ len;
+                if !self.is_contiguous_to(top_index, buddy_index) {
+                    break;
+                }
 
+                let buddy = &mut self.frames[buddy_index];
                 if buddy.using || buddy.order != order {
                     break;
                 }
 
                 self.orders[order].remove(&Shared::new(buddy));
-                top_index &= !count;
+                top_index &= !len;
                 order += 1;
             }
 
@@ -102,6 +149,11 @@ impl BuddyManager {
     pub fn free_size(&self) -> u64 {
         self.frames.iter().filter(|frame| !frame.using).fold(0, |acc, _| acc + arch::FRAME_SIZE as u64)
     }
+
+    #[inline]
+    fn is_contiguous_to(&self, a: usize, b: usize) -> bool {
+        self.frames[a].addr + FRAME_SIZE_ADDR * (b - a) as arch::AddrType == self.frames[b].addr
+    }
 }
 
 pub struct PageFrame {
@@ -114,7 +166,7 @@ pub struct PageFrame {
 
 impl PageFrame {
     #[inline(always)]
-    pub const fn new(addr: PhysAddr, using: bool) -> PageFrame {
+    const fn new(addr: PhysAddr, using: bool) -> PageFrame {
         PageFrame {
             using: using,
             order: 0,
@@ -150,8 +202,8 @@ impl_linked_node!(Shared<PageFrame> { prev: prev, next: next });
 static MANAGER: Force<BuddyManager> = Force::new();
 
 #[inline]
-pub fn init_by_frames(frames: &'static mut [PageFrame]) {
-    MANAGER.setup().init(frames);
+pub fn init_by_iter<I: Iterator<Item=Range<PhysAddr>>>(size: arch::AddrType, f: I) {
+    MANAGER.setup().init(size, f);
 }
 
 #[inline(always)]
