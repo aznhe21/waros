@@ -50,7 +50,9 @@ LIBALLOC_SYSTEM := $(OBJDIR)liballoc_system.rlib
 LIBALLOC := $(OBJDIR)liballoc.rlib
 LIBRUSTC_UNICODE := $(OBJDIR)librustc_unicode.rlib
 LIBCOLLECTIONS := $(OBJDIR)libcollections.rlib
-OBJS := start.o assembly.o kernel.o libcore.rlib liballoc_system.rlib liballoc.rlib librustc_unicode.rlib libcollections.rlib
+DEP_OBJS := libcore.rlib liballoc_system.rlib liballoc.rlib librustc_unicode.rlib libcollections.rlib
+KERNEL_OBJS := start.o assembly.o kernel.o
+OBJS := $(KERNEL_OBJS) $(DEP_OBJS)
 OBJS := $(OBJS:%=$(OBJDIR)%)
 BIN := ../kernel.$(ARCH).bin
 DSM := $(BIN).dsm
@@ -59,14 +61,17 @@ GRUB_CFG := $(GRUB_DIR)boot/grub/grub.cfg
 GRUB_IMG := $(GRUB_DIR)kernel.img
 GRUB_ISO := ../grub.$(ARCH).iso
 
-.PHONY: all dsm clean UPDATE
+.PHONY: all dsm clean distclean UPDATE
 
 all: $(BIN) $(GRUB_ISO)
 
 dsm: $(DSM)
 
 clean:
-	$(RM) -rf $(BIN) $(DSM) $(OBJDIR) $(GRUB_ISO) $(GRUB_IMG)
+	$(RM) -rf $(BIN) $(DSM) $(KERNEL_OBJS:%=$(OBJDIR)%) $(GRUB_ISO) $(GRUB_IMG)
+
+distclean: clean
+	$(RM) -rf $(OBJDIR)
 
 UPDATE:
 	curl https://static.rust-lang.org/dist/rustc-nightly-src.tar.gz -o ../rustc-nightly-src.tar.gz
@@ -75,7 +80,7 @@ NEWPATCH:
 	cd .. && diff -rub libcore_orig/ libcore/ > libcore_nofp.patch || true
 
 # Final link command
-$(BIN): $(OBJS) arch/$(ARCH)/link.ld
+$(BIN): $(OBJS) $(LINKSCRIPT)
 	$(LD) -o $@ $(LINKFLAGS) $(OBJS)
 ifeq ($(ARCH),amd64)
 	@mv $@ $@.elf64
