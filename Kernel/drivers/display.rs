@@ -1,5 +1,8 @@
+use arch;
 use core::mem;
 use core::ops::Range;
+use core::ptr::Shared;
+use alloc::boxed::Box;
 
 /// 24ビットRGBを表す。
 #[repr(packed)]
@@ -211,5 +214,21 @@ impl Display for Dummy {
     fn clear(&self, _color: Color) {}
     #[inline(always)]
     fn line(&self, _color: Color, _from: (DisplaySize, DisplaySize), _to: (DisplaySize, DisplaySize)) {}
+}
+
+static mut display: Option<Shared<Display>> = None;
+
+/// アーキテクチャに適した`Display`への参照を返す。
+pub fn preferred() -> &'static Display {
+    unsafe {
+        match display {
+            Some(ptr) => &**ptr,
+            None => {
+                let ptr = Shared::new(Box::into_raw(arch::drivers::display::preferred()));
+                display = Some(ptr);
+                &**ptr
+            }
+        }
+    }
 }
 

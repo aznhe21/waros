@@ -87,7 +87,7 @@ pub fn kmain() -> ! {
     log!("Total: {} MB Free: {} MB", memory::buddy::manager().total_size() / 1024 / 1024,
         memory::buddy::manager().free_size() / 1024 / 1024);
 
-    let display = arch::drivers::display::Vbe::new();
+    let display = drivers::display::preferred();
     display.log();
     display.clear(Color::White);
 
