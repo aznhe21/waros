@@ -108,11 +108,6 @@ impl VirtAddr {
     }
 
     #[inline(always)]
-    pub fn from_mut_ptr<T>(ptr: *mut T) -> VirtAddr {
-        VirtAddr(ptr as usize)
-    }
-
-    #[inline(always)]
     pub const fn null() -> VirtAddr {
         VirtAddr(0)
     }

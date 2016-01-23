@@ -152,7 +152,7 @@ impl PageTable {
 
     #[inline(always)]
     pub unsafe fn set(&mut self) {
-        let addr = VirtAddr::from_mut_ptr(self.pd).as_phys_addr().value() as u32;
+        let addr = VirtAddr::from_ptr(self.pd).as_phys_addr().value() as u32;
         asm!("mov %eax, %cr3" :: "{eax}"(addr) :: "volatile");
     }
 
@@ -164,7 +164,7 @@ impl PageTable {
             let pt_ptr = memory::kernel::allocate_raw(PageTableEntry::SIZE, arch::PAGE_SIZE) as
                 *mut PageTableEntry;
 
-            let base_addr = VirtAddr::from_mut_ptr(pt_ptr).as_phys_addr().value() as u32 >> 12;
+            let base_addr = VirtAddr::from_ptr(pt_ptr).as_phys_addr().value() as u32 >> 12;
 
             for i in 0 .. PageDirectoryEntry::LEN {
                 *pd_ptr.offset(i as isize) = PageDirectoryEntry::from_4kb_aligned(base_addr + i as u32);
