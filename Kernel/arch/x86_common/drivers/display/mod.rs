@@ -1,14 +1,17 @@
+pub use self::vga_text::{Console, Color as VgaColor, VgaText};
+pub use self::vbe::Vbe;
+pub use self::bochs::Bochs;
+
 use drivers::display;
 use arch::x86_io::{outb, load_eflags, save_eflags};
 use arch::interrupt;
 
 pub mod vga_text;
-pub mod vga;
 pub mod vbe;
 pub mod bochs;
 
 /*pub fn suitable() -> Display {
-    vga::Vga::new()
+    Vbe::new()
 }*/
 
 fn set_rgb_palette() {

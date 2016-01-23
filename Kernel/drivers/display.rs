@@ -1,6 +1,7 @@
 use core::mem;
 use core::ops::Range;
 
+/// 24ビットRGBを表す。
 #[repr(packed)]
 #[derive(Clone, Copy)]
 pub struct RGB {
@@ -10,11 +11,13 @@ pub struct RGB {
 }
 
 impl RGB {
+    /// `RGB`を8ビットにより表す。
     #[inline]
     pub fn as_c8(&self) -> u8 {
         (self.red & 0x03) | (self.green & 0x18) | (self.blue & 0xE0)
     }
 
+    /// `RGB`を15ビットにより表す。
     #[inline]
     pub fn as_c15(&self) -> u16 {
         (self.red   as u16 * (1 << 5) / (1 << 8)) << 10 | // 5-bits
@@ -22,6 +25,7 @@ impl RGB {
         (self.blue  as u16 * (1 << 5) / (1 << 8))         // 5-bits
     }
 
+    /// `RGB`を16ビットにより表す。
     #[inline]
     pub fn as_c16(&self) -> u16 {
         (self.red   as u16 * (1 << 5) / (1 << 8)) << 10 | // 5-bits
@@ -29,11 +33,13 @@ impl RGB {
         (self.blue  as u16 * (1 << 5) / (1 << 8))         // 5-bits
     }
 
+    /// `RGB`を24ビットにより表す。
     #[inline]
     pub fn as_c24(&self) -> (u8, u8, u8) {
         (self.blue, self.green, self.red)
     }
 
+    /// `RGB`を32ビットにより表す。
     #[inline]
     pub fn as_c32(&self) -> u32 {
         (self.red   as u32) << 16 |
@@ -61,6 +67,7 @@ pub const RGB_TABLE: [RGB; 16] = [
     RGB { red: 0x84, green: 0x84, blue: 0x84 },// 15: Dark Gray
 ];
 
+/// 16色の色を表す。
 #[derive(Clone, Copy)]
 #[repr(u8)]
 pub enum Color {
@@ -99,6 +106,7 @@ pub enum Color {
 }
 
 impl Color {
+    /// `u8`から`Color`を得る。
     pub fn from_u8(val: u8) -> Option<Color> {
         if val <= Color::DarkGray as u8 {
             Some(unsafe { mem::transmute(val) })
@@ -107,6 +115,7 @@ impl Color {
         }
     }
 
+    /// `Color`から`RGB`に変換する。
     pub fn as_rgb(&self) -> RGB {
         RGB_TABLE[*self as usize]
     }
@@ -115,33 +124,39 @@ impl Color {
 pub type DisplaySize = i32;
 
 pub trait Display {
-    fn is_available() -> bool;
-
+    /// ディスプレイに関するログを出す。
     fn log(&self) {
         let (width, height) = self.resolution();
         log!("Display: {}x{}", width, height);
     }
 
+    /// 解像度を返す。
     fn resolution(&self) -> (DisplaySize, DisplaySize);
+
+    /// ピクセル単位で色を描く。
     fn put(&self, color: Color, x: DisplaySize, y: DisplaySize);
 
+    /// 水平な線を描く。
     fn horizontal_line(&self, color: Color, range: Range<DisplaySize>, y: DisplaySize) {
         for x in range {
             self.put(color, x, y);
         }
     }
 
+    /// 指定したx, y, w, hの範囲内に矩形を描く。
     fn fill(&self, color: Color, rect: (DisplaySize, DisplaySize, DisplaySize, DisplaySize)) {
         for y in rect.1 .. rect.1 + rect.3 {
             self.horizontal_line(color, rect.0 .. rect.0 + rect.2, y);
         }
     }
 
+    /// ディスプレイ全体をクリアする。
     fn clear(&self, color: Color) {
         let res = self.resolution();
         self.fill(color, (0, 0, res.0, res.1));
     }
 
+    /// 線を描画する。
     fn line(&self, color: Color, from: (DisplaySize, DisplaySize), to: (DisplaySize, DisplaySize)) {
         let dx = (to.0 - from.0).abs();
         let dy = (to.1 - from.1).abs();
@@ -169,16 +184,18 @@ pub trait Display {
     }
 }
 
+/// 画面のない環境向けのダミー実装。
 pub struct Dummy;
 
 impl Dummy {
     #[inline(always)]
     pub fn new() -> Dummy { Dummy }
+
+    #[inline(always)]
+    pub fn is_available() -> bool { false }
 }
 
 impl Display for Dummy {
-    #[inline(always)]
-    fn is_available() -> bool { false }
     #[inline(always)]
     fn log(&self) {}
     #[inline(always)]

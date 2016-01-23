@@ -1,11 +1,13 @@
-#![allow(dead_code)]
-
+use arch::{self, page};
 use arch::x86_io::outb;
+use memory::kernel::PhysAddr;
 use drivers::display::{self, DisplaySize, Display};
 use core::mem;
+use core::u16;
 use core::cmp::max;
 
-const VGA_ADDRESS: *mut u16 = 0xB8000 as *mut u16;
+const VGA_ADDRESS: arch::AddrType = 0xB8000;
+const VGA_PTR: *mut u16 = VGA_ADDRESS as *mut u16;
 const VGA_SIZE: (u16, u16) = (80, 25);
 
 #[derive(Clone, Copy)]
@@ -29,7 +31,7 @@ pub enum Color {
 }
 
 impl Color {
-    fn from_common_color(color: display::Color) -> Color {
+    fn from_common(color: display::Color) -> Color {
         match color {
             display::Color::Black      => Color::Black,
             display::Color::Red        => Color::LightRed,
@@ -92,7 +94,9 @@ impl Console {
             b'\x08' => (max(0, x - 1), y + 1),
             b'\x0b' => (x, y + 1),
             _ => {
-                unsafe { *VGA_ADDRESS.offset((x + y * width) as isize) = make_entry(ch, fg, bg) };
+                unsafe {
+                    *VGA_PTR.offset((x + y * width) as isize) = make_entry(ch, fg, bg);
+                }
                 self.normalize((x + 1, y))
             }
         }
@@ -115,7 +119,9 @@ pub fn clear(bg: Color) {
 
 pub fn put(x: u16, y: u16, ch: u8, fg: Color, bg: Color) {
     let width = VGA_SIZE.0;
-    unsafe { *VGA_ADDRESS.offset((x + y * width) as isize) = make_entry(ch, fg, bg) };
+    unsafe {
+        *VGA_PTR.offset((x + y * width) as isize) = make_entry(ch, fg, bg);
+    }
 }
 
 pub fn puts(x: u16, y: u16, s: &str, fg: Color, bg: Color) {
@@ -165,19 +171,24 @@ pub struct VgaText;
 
 impl VgaText {
     pub fn new() -> VgaText {
+        let res = VGA_SIZE.0 as usize * VGA_SIZE.1 as usize;
+        let vram = PhysAddr::from_raw(VGA_ADDRESS);
+        let vram_end = vram + (res * u16::BYTES) as arch::AddrType;
+        page::table().map_direct(page::PageTable::FLAGS_KERNEL, vram .. vram_end);
+
         VgaText
     }
+
+    pub fn is_available() -> bool { true }
 }
 
 impl Display for VgaText {
-    fn is_available() -> bool { true }
-
     fn resolution(&self) -> (DisplaySize, DisplaySize) {
         (VGA_SIZE.0 as DisplaySize, VGA_SIZE.1 as DisplaySize)
     }
 
-    fn put(&self, ccolor: display::Color, x: DisplaySize, y: DisplaySize) {
-        let color = Color::from_common_color(ccolor);
+    fn put(&self, color: display::Color, x: DisplaySize, y: DisplaySize) {
+        let color = Color::from_common(color);
         put(x as u16, y as u16, b' ', Color::Black, color);
     }
 }

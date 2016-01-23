@@ -344,8 +344,8 @@ pub struct VbeModeInfo {
 
 impl VbeModeInfo {
     #[inline(always)]
-    pub fn vram(&self) -> *mut u8 {
-        self.phys_base_ptr as *mut u8
+    pub fn vram(&self) -> PhysAddr {
+        PhysAddr::from_raw(self.phys_base_ptr as arch::AddrType)
     }
 }
 

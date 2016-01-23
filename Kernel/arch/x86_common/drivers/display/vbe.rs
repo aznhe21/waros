@@ -1,6 +1,5 @@
 use memory;
 use arch::{self, multiboot, page};
-use memory::kernel::PhysAddr;
 use drivers::display::{Color, DisplaySize, Display};
 use core::mem;
 use core::{u8, u16, u32};
@@ -33,12 +32,15 @@ impl Vbe {
         );
 
         let res = vbe.minfo.h_res as usize * vbe.minfo.v_res as usize;
-        let vram = vbe.minfo.phys_base_ptr as arch::AddrType;
+        let vram = vbe.minfo.vram();
         let vram_end = vram + (res * vbe.minfo.bpp as usize) as arch::AddrType;
-        let vram_range = PhysAddr::from_raw(vram) .. PhysAddr::from_raw(vram_end);
-        page::table().map_direct(page::PageTable::FLAGS_KERNEL, vram_range);
+        page::table().map_direct(page::PageTable::FLAGS_KERNEL, vram .. vram_end);
 
         vbe
+    }
+
+    pub fn is_available() -> bool {
+        multiboot::info().vbe_controller_info().map_or(false, |cinfo| cinfo.is_valid() && cinfo.version >= 0x0102)
     }
 
     #[inline(always)]
@@ -53,7 +55,7 @@ impl Vbe {
 
     #[inline(always)]
     fn vram<T>(&self) -> *mut T {
-        self.minfo.vram() as *mut T
+        self.minfo.phys_base_ptr as *mut T
     }
 
     #[inline(always)]
@@ -114,10 +116,6 @@ macro_rules! delegate {
 }
 
 impl Display for Vbe {
-    fn is_available() -> bool {
-        multiboot::info().vbe_controller_info().map_or(false, |cinfo| cinfo.is_valid() && cinfo.version >= 0x0102)
-    }
-
     fn log(&self) {
         log!("Display: {}x{}@{}bpp", self.minfo.h_res, self.minfo.v_res, self.minfo.bpp);
         log!("Mask: Red={}, Green={}, Blue={}, Reserve={}", self.minfo.rmask, self.minfo.gmask, self.minfo.bmask,
@@ -131,7 +129,6 @@ impl Display for Vbe {
 
     delegate!(put(x: DisplaySize, y: DisplaySize) => put_by_uint);
     delegate!(horizontal_line(range: Range<DisplaySize>, y: DisplaySize) => horizontal_line_by_uint);
-    //delegate!(clear() => clear_by_uint);
 
     fn clear(&self, color: Color) {
         let rgb = color.as_rgb();

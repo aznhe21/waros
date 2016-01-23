@@ -1,6 +1,8 @@
-use arch::multiboot;
+use memory;
+use arch::{self, multiboot, page};
 use arch::x86_io::{inw, outw};
 use drivers::display::{Color, DisplaySize, Display};
+use core::u32;
 
 const VBE_DISPI_IOPORT_INDEX: u16 = 0x01CE;
 const VBE_DISPI_IOPORT_DATA:  u16 = 0x01CF;
@@ -43,70 +45,53 @@ unsafe fn read_reg(index: u16) -> u16 {
     inw(VBE_DISPI_IOPORT_DATA)
 }
 
-//static mut vram: *mut u8 = ptr::null_mut();
-
-#[inline(always)]
-pub fn is_available() -> bool {
-    unsafe { read_reg(VBE_DISPI_INDEX_ID) & 0xFFF0 == VBE_DISPI_ID0 }
-}
-
-/*#[inline(always)]
-fn configure(width: u16, height: u16, depth: u16, use_lfb: bool, clear_memory: bool) -> *mut u8 {
-    unsafe {
-        /*if !is_available() {
-            panic!("Bochs not available");
-        }
-
-        let mem = read_reg(VBE_DISPI_INDEX_VIDEO_MEMORY_64K) * 64 * 1024;
-        let yres_virt = mem / (width * (depth / 8));*/
-
-        write_reg(VBE_DISPI_INDEX_ENABLE,      VBE_DISPI_DISABLED);
-        write_reg(VBE_DISPI_INDEX_XRES,        width);
-        write_reg(VBE_DISPI_INDEX_YRES,        height);
-        write_reg(VBE_DISPI_INDEX_BPP,         depth);
-        //write_reg(VBE_DISPI_INDEX_BANK,        0);
-        //write_reg(VBE_DISPI_INDEX_VIRT_WIDTH,  width);
-        //write_reg(VBE_DISPI_INDEX_VIRT_HEIGHT, yres_virt);
-        //write_reg(VBE_DISPI_INDEX_X_OFFSET,    0);
-        //write_reg(VBE_DISPI_INDEX_Y_OFFSET,    0);
-        write_reg(VBE_DISPI_INDEX_ENABLE,      VBE_DISPI_ENABLED |
-          if use_lfb      { VBE_DISPI_LFB_ENABLED } else { 0 } |
-          if clear_memory { 0 }                     else { VBE_DISPI_NOCLEARMEM }
-        );
-
-        //log!("{}x{} @ {} bpp", width, height, depth);
-
-        (if use_lfb { 0xFD000000_usize } else { 0x000A0000 }) as *mut u8
-    }
-}*/
-
 pub struct Bochs {
     width: DisplaySize,
     height: DisplaySize,
-    vram: *mut u8
+    vram: *mut u32
 }
 
 impl Bochs {
     pub fn new(width: DisplaySize, height: DisplaySize) -> Bochs {
         super::set_rgb_palette();
+
+        let minfo = multiboot::info().vbe_mode_info().unwrap();
         unsafe {
-            write_reg(VBE_DISPI_INDEX_ENABLE,      VBE_DISPI_DISABLED);
-            write_reg(VBE_DISPI_INDEX_XRES,        width as u16);
-            write_reg(VBE_DISPI_INDEX_YRES,        height as u16);
-            write_reg(VBE_DISPI_INDEX_BPP,         8);
-            write_reg(VBE_DISPI_INDEX_ENABLE,      VBE_DISPI_ENABLED | VBE_DISPI_LFB_ENABLED);
+            write_reg(VBE_DISPI_INDEX_ENABLE, VBE_DISPI_DISABLED);
+            write_reg(VBE_DISPI_INDEX_XRES,   width as u16);
+            write_reg(VBE_DISPI_INDEX_YRES,   height as u16);
+            write_reg(VBE_DISPI_INDEX_BPP,    u32::BITS as u16);
+            write_reg(VBE_DISPI_INDEX_ENABLE, VBE_DISPI_ENABLED | VBE_DISPI_LFB_ENABLED);
+
+            let res = width as usize * height as usize;
+            let vram = minfo.vram();
+            let vram_end = vram + (res * u32::BYTES) as arch::AddrType;
+            page::table().map_direct(page::PageTable::FLAGS_KERNEL, vram .. vram_end);
         }
 
         Bochs {
             width: width,
             height: height,
-            vram: multiboot::info().vbe_mode_info().unwrap().vram() as *mut u8
+            vram: minfo.phys_base_ptr as *mut u32
+        }
+    }
+
+    pub fn is_available() -> bool {
+        unsafe {
+            multiboot::info().vbe_mode_info().is_some() && read_reg(VBE_DISPI_INDEX_ID) & 0xFFF0 == VBE_DISPI_ID0
         }
     }
 }
 
 impl Display for Bochs {
-    fn is_available() -> bool { is_available() }
+    fn log(&self) {
+        unsafe {
+            let width  = read_reg(VBE_DISPI_INDEX_XRES);
+            let height = read_reg(VBE_DISPI_INDEX_YRES);
+            let depth  = read_reg(VBE_DISPI_INDEX_BPP);
+            log!("Display: {}x{}@{}bpp", width, height, depth);
+        }
+    }
 
     fn resolution(&self) -> (DisplaySize, DisplaySize) {
         (self.width, self.height)
@@ -115,33 +100,15 @@ impl Display for Bochs {
     fn put(&self, color: Color, x: DisplaySize, y: DisplaySize) {
         let offset = y * self.width + x;
         unsafe {
-            *self.vram.offset(offset as isize) = color as u8;
+            *self.vram.offset(offset as isize) = color.as_rgb().as_c32();
+        }
+    }
+
+    fn clear(&self, color: Color) {
+        let size = self.width as usize * self.height as usize;
+        unsafe {
+            memory::fill32(self.vram, color.as_rgb().as_c32(), size);
         }
     }
 }
-
-/*#[inline(always)]
-pub fn init() {
-    unsafe {
-        common::set_rgb();
-        configure(320, 200, 8, true, true);
-        /*for i in 0_isize..322+1 {
-            *vram.offset(i + 0) = 0xFF;
-            // *vram.offset(i * 3 + 1) = 0xFF;
-            // *vram.offset(i * 3 + 2) = 0x00;
-        }*/
-        //vram = 0x000A0000 as *mut u8;
-
-        fill(Color::Yellow, 0, 0, 320, 200);
-        /*for i in 0..1024 {
-            *vram.offset(i) = Color::Yellow as u8;
-        }*/
-    }
-}
-
-pub fn fill(color: Color, x: u16, y: u16, width: u16, height: u16) {
-    unsafe {
-        common::fill(vram, color as u8, 320, x, y, width, height);
-    }
-}*/
 
