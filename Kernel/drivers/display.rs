@@ -219,6 +219,7 @@ impl Display for Dummy {
 static mut display: Option<Shared<Display>> = None;
 
 /// アーキテクチャに適した`Display`への参照を返す。
+/// 未設定の場合は新たに設定される。
 pub fn preferred() -> &'static Display {
     unsafe {
         match display {
@@ -229,6 +230,26 @@ pub fn preferred() -> &'static Display {
                 &**ptr
             }
         }
+    }
+}
+
+/// 現在設定されている`Display`を返す。
+#[inline]
+pub fn get() -> Option<&'static Display> {
+    unsafe {
+        display.map(|ptr| &**ptr)
+    }
+}
+
+/// 新しく`Display`を設定する。
+/// 既に設定されている`Display`は破棄される。
+#[inline]
+pub fn set(value: Box<Display>) {
+    unsafe {
+        if let Some(ptr) = display {
+            Box::from_raw(*ptr);
+        }
+        display = Some(Shared::new(Box::into_raw(value)));
     }
 }
 

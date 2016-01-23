@@ -79,6 +79,10 @@ pub fn kmain() -> ! {
     //memory::init_by_manual(arch::kernel_end().as_phys_addr() .. arch::kernel_end().as_phys_addr() + 0x1000000);// 16MB
     //memory::init_by_detection(memory::MAX_ADDR);
 
+    if arch::drivers::display::Bochs::is_available() {
+        drivers::display::set(alloc::boxed::Box::new(arch::drivers::display::Bochs::new(1280, 720)));
+    }
+
     event::init();
     timer::init();
     arch::interrupt::init();
