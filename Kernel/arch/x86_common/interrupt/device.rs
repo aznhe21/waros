@@ -42,8 +42,9 @@ mod keyboard {
         IRQ::Keyboard.eoi();
         unsafe {
             let prev_code = state.code;
-            state.code = inb(0x60) as u16;
-            let key = match state.code {
+            let code = inb(0x60) as u16;
+            state.code = code & 0x7F;
+            let key = match code {
                 0xFA => return,
                 // 0xE0 => special key
                 code if code & 0x80 == 0 && code & 0x7F == prev_code => Keyboard::Press(state.clone()),
