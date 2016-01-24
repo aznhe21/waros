@@ -47,7 +47,7 @@ impl PageDirectoryEntry {
     }
 
     #[inline]
-    pub fn slice(&mut self) -> &'static mut [PageTableEntry] {
+    pub fn as_slice(&mut self) -> &'static mut [PageTableEntry] {
         unsafe {
             slice::from_raw_parts_mut(self.page_table(), PageTableEntry::LEN)
         }
@@ -198,7 +198,7 @@ impl PageTable {
     }
 
     #[inline]
-    fn slice(&mut self) -> &'static mut [PageDirectoryEntry] {
+    fn as_slice(&mut self) -> &'static mut [PageDirectoryEntry] {
         unsafe { slice::from_raw_parts_mut(self.pd, PageDirectoryEntry::LEN) }
     }
 
@@ -232,12 +232,16 @@ impl PageTable {
 
     fn find_free_addr(&mut self, size: usize) -> VirtAddr {
         let map_pages = (size + arch::PAGE_SIZE - 1) / arch::PAGE_SIZE;
-        let pde_index = PageTable::get_pde_index(memory::kernel::end_addr());
+        let pde_index = 1;
         let mut begin_addr = 0;
         let mut free_pages = 0;
 
-        for (pde, pde_addr) in self.slice()[pde_index..].iter_mut().zip((pde_index << 22 ..).step_by(1 << 22)) {
-            for (pte, pte_addr) in pde.slice().iter_mut().zip((pde_addr..).step_by(1 << 12)) {
+        //for (pde, pde_addr) in self.as_slice()[pde_index..].iter_mut().zip((pde_index << 22 ..).step_by(1 << 22)) {
+        //    for (pte, pte_addr) in pde.as_slice().iter_mut().zip((pde_addr..).step_by(1 << 12)) {
+        for (i, pde) in self.as_slice()[pde_index..].iter_mut().enumerate() {
+            let pde_addr = (pde_index + i) << 22;
+            for (j, pte) in pde.as_slice().iter_mut().enumerate() {
+                let pte_addr = pde_addr + (j << 12);
                 if pte.get_flags() & PageTableEntry::FLAG_PRESENT != 0 {
                     begin_addr = 0;
                 } else {
@@ -264,6 +268,8 @@ impl PageTable {
             let virt_range = virt_addr .. virt_addr + size;
             let phys_range = phys_addr .. phys_addr + size as arch::AddrType;
             self.map_range(flags, virt_range, phys_range);
+        } else {
+            debug_log!("Unable to map a page {:p}", unsafe { (**page).addr() });
         }
 
         virt_addr
