@@ -24,9 +24,12 @@
 #![no_std]
 #![no_builtins]
 
+#[macro_use]
 extern crate rustc_unicode;
 extern crate alloc_system;
+#[macro_use]
 extern crate alloc;
+#[macro_use]
 extern crate collections;
 
 // Macros, need to be loaded before everything else due to how rust parses
