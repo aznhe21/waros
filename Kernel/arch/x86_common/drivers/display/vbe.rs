@@ -12,8 +12,6 @@ pub struct Vbe {
 
 impl Vbe {
     pub fn new() -> Vbe {
-        super::set_rgb_palette();
-
         let vbe = Vbe {
             cinfo: multiboot::info().vbe_controller_info().unwrap(),
             minfo: multiboot::info().vbe_mode_info().unwrap()
@@ -103,13 +101,12 @@ impl Vbe {
 macro_rules! delegate {
     ($name:ident($($arg_name:ident : $arg_type:ty),*) => $to:ident) => {
         fn $name(&self, color: Color $(, $arg_name: $arg_type)*) {
-            let rgb = color.as_rgb();
             match (self.minfo.rmask, self.minfo.gmask, self.minfo.bmask, self.minfo.resv_mask) {
-                (8, 8, 8, 8) => self.$to(rgb.as_c32() $(, $arg_name)*),
-                (8, 8, 8, 0) => self.$to(rgb.as_c24() $(, $arg_name)*),
-                (5, 6, 5, 0) => self.$to(rgb.as_c16() $(, $arg_name)*),
-                (5, 5, 5, 0) => self.$to(rgb.as_c15() $(, $arg_name)*),
-                _            => self.$to(rgb.as_c8()  $(, $arg_name)*),
+                (8, 8, 8, 8) => self.$to(color.as_c32() $(, $arg_name)*),
+                (8, 8, 8, 0) => self.$to(color.as_c24() $(, $arg_name)*),
+                (5, 6, 5, 0) => self.$to(color.as_c16() $(, $arg_name)*),
+                (5, 5, 5, 0) => self.$to(color.as_c15() $(, $arg_name)*),
+                _            => self.$to(color.as_c8()  $(, $arg_name)*),
             }
         }
     }
@@ -131,14 +128,13 @@ impl Display for Vbe {
     delegate!(horizontal_line(range: Range<DisplaySize>, y: DisplaySize) => horizontal_line_by_uint);
 
     fn clear(&self, color: Color) {
-        let rgb = color.as_rgb();
         let size = self.bpl::<u8>() * self.height() as usize;
         match (self.minfo.rmask, self.minfo.gmask, self.minfo.bmask, self.minfo.resv_mask) {
-            (8, 8, 8, 8) => unsafe { memory::fill32(self.vram(), rgb.as_c32(), size) },
-            (8, 8, 8, 0) => self.clear_by_uint(rgb.as_c24()),
-            (5, 6, 5, 0) => unsafe { memory::fill16(self.vram(), rgb.as_c16(), size) },
-            (5, 5, 5, 0) => unsafe { memory::fill16(self.vram(), rgb.as_c15(), size) },
-            _            => unsafe { memory::fill8(self.vram(), rgb.as_c8(), size) }
+            (8, 8, 8, 8) => unsafe { memory::fill32(self.vram(), color.as_c32(), size) },
+            (8, 8, 8, 0) => self.clear_by_uint(color.as_c24()),
+            (5, 6, 5, 0) => unsafe { memory::fill16(self.vram(), color.as_c16(), size) },
+            (5, 5, 5, 0) => unsafe { memory::fill16(self.vram(), color.as_c15(), size) },
+            _            => unsafe { memory::fill8(self.vram(), color.as_c8(), size) }
         }
     }
 }

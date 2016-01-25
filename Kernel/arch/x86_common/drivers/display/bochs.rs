@@ -53,8 +53,6 @@ pub struct Bochs {
 
 impl Bochs {
     pub fn new(width: DisplaySize, height: DisplaySize) -> Bochs {
-        super::set_rgb_palette();
-
         let minfo = multiboot::info().vbe_mode_info().unwrap();
         unsafe {
             write_reg(VBE_DISPI_INDEX_ENABLE, VBE_DISPI_DISABLED);
@@ -100,14 +98,14 @@ impl Display for Bochs {
     fn put(&self, color: Color, x: DisplaySize, y: DisplaySize) {
         let offset = y * self.width + x;
         unsafe {
-            *self.vram.offset(offset as isize) = color.as_rgb().as_c32();
+            *self.vram.offset(offset as isize) = color.as_c32();
         }
     }
 
     fn clear(&self, color: Color) {
         let size = self.width as usize * self.height as usize;
         unsafe {
-            memory::fill32(self.vram, color.as_rgb().as_c32(), size);
+            memory::fill32(self.vram, color.as_c32(), size);
         }
     }
 }

@@ -96,11 +96,12 @@ pub fn kmain() -> ! {
 
     let display = drivers::display::preferred();
     display.log();
-    display.clear(Color::White);
+    display.clear(Color::WHITE);
 
     let mut mouse_pos = (0 as DisplaySize, 0 as DisplaySize);
     let mut clicking = false;
-    let mut color: u8 = 1;
+    let mut color_idx = 1;
+    let mut color = Color::DARK_RED;
 
     let (mut pri_count, mut a_count) = ((0usize, 0usize), (0usize, 0usize));
 
@@ -139,10 +140,9 @@ pub fn kmain() -> ! {
 
                 match state.code {
                     0x01 => {// Esc
-                        display.clear(Color::White);
+                        display.clear(Color::WHITE);
                     },
                     0x1C => {// Enter
-                        let color = Color::from_u8(color).unwrap();
                         display.clear(color);
                     },
                     0x39 => {// Space
@@ -176,22 +176,27 @@ pub fn kmain() -> ! {
                 }
                 log!("Mouse: {} {}", mouse_pos.0, mouse_pos.1);
 
-                let pcolor = Color::from_u8(color).unwrap();
                 if clicking {
                     let l = cmp::max(0, mouse_pos.0 - 4);        // 左端を切り上げ
                     let r = cmp::min(mouse_pos.0 + 4, res.0 - 1);// 右端を切り捨て
                     let t = cmp::max(0, mouse_pos.1 - 4);        // 上端を切り上げ
                     let b = cmp::min(mouse_pos.1 + 4, res.1 - 1);// 下端を切り捨て
-                    display.fill(pcolor, (l, t, r - l + 1, b - t + 1));
+                    display.fill(color, (l, t, r - l + 1, b - t + 1));
                 } else {
-                    //display.put(pcolor, mouse_pos.0, mouse_pos.1);
-                    display.line(pcolor, (prev_mouse.0, prev_mouse.1), (mouse_pos.0, mouse_pos.1));
+                    //display.put(color, mouse_pos.0, mouse_pos.1);
+                    display.line(color, (prev_mouse.0, prev_mouse.1), (mouse_pos.0, mouse_pos.1));
                 }
 
-                color += 1;
-                if color > 15 {
-                    color = 1;
+                if color_idx < 1 << 6 {
+                    color_idx += 1;
+                } else {
+                    color_idx = 0;
                 }
+                color = Color::new(
+                    (color_idx & 3) * (0xFF/3),
+                    (color_idx >> 2 & 3) * (0xFF/3),
+                    (color_idx >> 4 & 3) * (0xFF/3)
+                );
             },
             Some(Event::Timer(timer_id)) => {
                 match timer_id {

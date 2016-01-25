@@ -1,5 +1,5 @@
 use arch;
-use core::mem;
+use core::fmt;
 use core::ops::Range;
 use core::ptr::Shared;
 use alloc::boxed::Box;
@@ -7,42 +7,95 @@ use alloc::boxed::Box;
 /// 24ビットRGBを表す。
 #[repr(packed)]
 #[derive(Clone, Copy)]
-pub struct RGB {
+pub struct Color {
     pub red:   u8,
     pub green: u8,
     pub blue:  u8
 }
 
-impl RGB {
-    /// `RGB`を8ビットにより表す。
+impl Color {
+    pub const BLACK:       Color = Color { red: 0x00, green: 0x00, blue: 0x00 };
+    pub const RED:         Color = Color { red: 0xFF, green: 0x00, blue: 0x00 };
+    pub const LIME:        Color = Color { red: 0x00, green: 0xFF, blue: 0x00 };
+    pub const YELLOW:      Color = Color { red: 0xFF, green: 0xFF, blue: 0x00 };
+    pub const BLUE:        Color = Color { red: 0x00, green: 0x00, blue: 0xFF };
+    pub const PURPLE:      Color = Color { red: 0xFF, green: 0x00, blue: 0xFF };
+    pub const CYAN:        Color = Color { red: 0x00, green: 0xFF, blue: 0xFF };
+    pub const WHITE:       Color = Color { red: 0xFF, green: 0xFF, blue: 0xFF };
+    pub const GRAY:        Color = Color { red: 0xC6, green: 0xC6, blue: 0xC6 };
+    pub const DARK_RED:    Color = Color { red: 0x84, green: 0x00, blue: 0x00 };
+    pub const GREEN:       Color = Color { red: 0x00, green: 0x84, blue: 0x00 };
+    pub const DARK_YELLOW: Color = Color { red: 0x84, green: 0x84, blue: 0x00 };
+    pub const DARK_BLUE:   Color = Color { red: 0x00, green: 0x00, blue: 0x84 };
+    pub const DARK_PURPLE: Color = Color { red: 0x84, green: 0x00, blue: 0x84 };
+    pub const DARK_CYAN:   Color = Color { red: 0x00, green: 0x84, blue: 0x84 };
+    pub const DARK_GRAY:   Color = Color { red: 0x84, green: 0x84, blue: 0x84 };
+
+    #[inline(always)]
+    pub const fn new(red: u8, green: u8, blue: u8) -> Color {
+        Color {
+            red:   red,
+            green: green,
+            blue:  blue
+        }
+    }
+
+    #[inline(always)]
+    pub const fn from_c15(color: u16) -> Color {
+        Color {
+            red:   (color >> 10) as u8 * (1 << (8 - 5)),
+            green: (color >>  5) as u8 * (1 << (8 - 5)),
+            blue:  (color >>  0) as u8 * (1 << (8 - 5))
+        }
+    }
+
+    #[inline(always)]
+    pub const fn from_c16(color: u16) -> Color {
+        Color {
+            red:   (color >> 10) as u8 * (1 << (8 - 5)),
+            green: (color >>  5) as u8 * (1 << (8 - 6)),
+            blue:  (color >>  0) as u8 * (1 << (8 - 5))
+        }
+    }
+
+    #[inline(always)]
+    pub const fn from_c32(color: u32) -> Color {
+        Color {
+            red:   (color >> 16 & 0xFF) as u8,
+            green: (color >>  8 & 0xFF) as u8,
+            blue:  (color >>  0 & 0xFF) as u8
+        }
+    }
+
+    /// `Color`を8ビットにより表す。
     #[inline]
     pub fn as_c8(&self) -> u8 {
         (self.red & 0x03) | (self.green & 0x18) | (self.blue & 0xE0)
     }
 
-    /// `RGB`を15ビットにより表す。
+    /// `Color`を15ビットにより表す。
     #[inline]
     pub fn as_c15(&self) -> u16 {
-        (self.red   as u16 * (1 << 5) / (1 << 8)) << 10 | // 5-bits
-        (self.green as u16 * (1 << 5) / (1 << 8)) <<  5 | // 5-bits
-        (self.blue  as u16 * (1 << 5) / (1 << 8))         // 5-bits
+        (self.red   as u16 / (1 << (8 - 5))) << 10 | // 5-bits
+        (self.green as u16 / (1 << (8 - 5))) <<  5 | // 5-bits
+        (self.blue  as u16 / (1 << (8 - 5)))         // 5-bits
     }
 
-    /// `RGB`を16ビットにより表す。
+    /// `Color`を16ビットにより表す。
     #[inline]
     pub fn as_c16(&self) -> u16 {
-        (self.red   as u16 * (1 << 5) / (1 << 8)) << 10 | // 5-bits
-        (self.green as u16 * (1 << 6) / (1 << 8)) <<  5 | // 6-bits
-        (self.blue  as u16 * (1 << 5) / (1 << 8))         // 5-bits
+        (self.red   as u16 / (1 << (8 - 5))) << 10 | // 5-bits
+        (self.green as u16 / (1 << (8 - 6))) <<  5 | // 6-bits
+        (self.blue  as u16 / (1 << (8 - 5)))         // 5-bits
     }
 
-    /// `RGB`を24ビットにより表す。
+    /// `Color`を24ビットにより表す。
     #[inline]
     pub fn as_c24(&self) -> (u8, u8, u8) {
         (self.blue, self.green, self.red)
     }
 
-    /// `RGB`を32ビットにより表す。
+    /// `Color`を32ビットにより表す。
     #[inline]
     pub fn as_c32(&self) -> u32 {
         (self.red   as u32) << 16 |
@@ -51,76 +104,9 @@ impl RGB {
     }
 }
 
-pub const RGB_TABLE: [RGB; 16] = [
-    RGB { red: 0x00, green: 0x00, blue: 0x00 },// 0:  Black
-    RGB { red: 0xFF, green: 0x00, blue: 0x00 },// 1:  Red
-    RGB { red: 0x00, green: 0xFF, blue: 0x00 },// 2:  Lime
-    RGB { red: 0xFF, green: 0xFF, blue: 0x00 },// 3:  Yellow
-    RGB { red: 0x00, green: 0x00, blue: 0xFF },// 4:  Blue
-    RGB { red: 0xFF, green: 0x00, blue: 0xFF },// 5:  Purple
-    RGB { red: 0x00, green: 0xFF, blue: 0xFF },// 6:  Cyan
-    RGB { red: 0xFF, green: 0xFF, blue: 0xFF },// 7:  White
-    RGB { red: 0xC6, green: 0xC6, blue: 0xC6 },// 8:  Gray
-    RGB { red: 0x84, green: 0x00, blue: 0x00 },// 9:  Dark Red
-    RGB { red: 0x00, green: 0x84, blue: 0x00 },// 10: Green
-    RGB { red: 0x84, green: 0x84, blue: 0x00 },// 11: Dark Yellow
-    RGB { red: 0x00, green: 0x00, blue: 0x84 },// 12: Dark Blue
-    RGB { red: 0x84, green: 0x00, blue: 0x84 },// 13: Dark Purple
-    RGB { red: 0x00, green: 0x84, blue: 0x84 },// 14: Dark Cyan
-    RGB { red: 0x84, green: 0x84, blue: 0x84 },// 15: Dark Gray
-];
-
-/// 16色の色を表す。
-#[derive(Clone, Copy)]
-#[repr(u8)]
-pub enum Color {
-    /*Black = 0,
-    Blue,
-    Green,
-    Cyan,
-    Red,
-    Pink,
-    Brown,
-    LightGray,
-    DarkGray,
-    LightBlue,
-    LightGreen,
-    LightCyan,
-    LightRed,
-    LightPink,
-    Yellow,
-    White*/
-    Black = 0,
-    Red,
-    Lime,
-    Yellow,
-    Blue,
-    Purple,
-    Cyan,
-    White,
-    Gray,
-    DarkRed,
-    Green,
-    DarkYellow,
-    DarkBlue,
-    DarkPurple,
-    DarkCyan,
-    DarkGray
-}
-
-impl Color {
-    /// `u8`から`Color`を得る。
-    pub fn from_u8(val: u8) -> Option<Color> {
-        if val <= Color::DarkGray as u8 {
-            Some(unsafe { mem::transmute(val) })
-        } else {
-            None
-        }
-    }
-
-    /// `Color`から`RGB`に変換する。
-    pub fn as_rgb(&self) -> RGB {
-        RGB_TABLE[*self as usize]
+impl fmt::Display for Color {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "#{:06x}", self.as_c32())
     }
 }
 

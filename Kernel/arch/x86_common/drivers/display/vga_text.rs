@@ -10,9 +10,10 @@ const VGA_ADDRESS: arch::AddrType = 0xB8000;
 const VGA_PTR: *mut u16 = VGA_ADDRESS as *mut u16;
 const VGA_SIZE: (u16, u16) = (80, 25);
 
-#[derive(Clone, Copy)]
+#[repr(u8)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Color {
-    Black,
+    Black = 0,
     Blue,
     Green,
     Cyan,
@@ -31,24 +32,30 @@ pub enum Color {
 }
 
 impl Color {
-    fn from_common(color: display::Color) -> Color {
+    pub fn from_common(color: display::Color) -> Color {
+        const LO_LO:  u8 = 0;
+        const LO_HI:  u8 = 84;
+        const MI_LO:  u8 = 85;
+        const MI_HI:  u8 = 170;
+        const HI_LO:  u8 = 171;
+        const HI_HI:  u8 = 255;
         match color {
-            display::Color::Black      => Color::Black,
-            display::Color::Red        => Color::LightRed,
-            display::Color::Lime       => Color::LightGreen,
-            display::Color::Yellow     => Color::Yellow,
-            display::Color::Blue       => Color::LightBlue,
-            display::Color::Purple     => Color::LightPink,
-            display::Color::Cyan       => Color::LightCyan,
-            display::Color::White      => Color::White,
-            display::Color::Gray       => Color::LightGray,
-            display::Color::DarkRed    => Color::Red,
-            display::Color::Green      => Color::Green,
-            display::Color::DarkYellow => Color::Brown,
-            display::Color::DarkBlue   => Color::Blue,
-            display::Color::DarkPurple => Color::Pink,
-            display::Color::DarkCyan   => Color::Cyan,
-            display::Color::DarkGray   => Color::DarkGray
+            display::Color { red: LO_LO...LO_HI, green: LO_LO...LO_HI, blue: LO_LO...LO_HI } => Color::Black,
+            display::Color { red: HI_LO...HI_HI, green: LO_LO...LO_HI, blue: LO_LO...LO_HI } => Color::LightRed,
+            display::Color { red: LO_LO...LO_HI, green: HI_LO...HI_HI, blue: LO_LO...LO_HI } => Color::LightGreen,
+            display::Color { red: HI_LO...HI_HI, green: HI_LO...HI_HI, blue: LO_LO...LO_HI } => Color::Yellow,
+            display::Color { red: LO_LO...LO_HI, green: LO_LO...LO_HI, blue: HI_LO...HI_HI } => Color::LightBlue,
+            display::Color { red: HI_LO...HI_HI, green: LO_LO...LO_HI, blue: HI_LO...HI_HI } => Color::LightPink,
+            display::Color { red: LO_LO...LO_HI, green: HI_LO...HI_HI, blue: HI_LO...HI_HI } => Color::LightCyan,
+            display::Color { red: HI_LO...HI_HI, green: HI_LO...HI_HI, blue: HI_LO...HI_HI } => Color::White,
+            display::Color { red: MI_LO...MI_HI, green: LO_LO...LO_HI, blue: LO_LO...LO_HI } => Color::Red,
+            display::Color { red: LO_LO...LO_HI, green: MI_LO...MI_HI, blue: LO_LO...LO_HI } => Color::Green,
+            display::Color { red: MI_LO...MI_HI, green: MI_LO...MI_HI, blue: LO_LO...LO_HI } => Color::Brown,
+            display::Color { red: LO_LO...LO_HI, green: LO_LO...LO_HI, blue: MI_LO...MI_HI } => Color::Blue,
+            display::Color { red: MI_LO...MI_HI, green: LO_LO...LO_HI, blue: MI_LO...MI_HI } => Color::Pink,
+            display::Color { red: LO_LO...LO_HI, green: MI_LO...MI_HI, blue: MI_LO...MI_HI } => Color::Cyan,
+            display::Color { red: MI_LO...MI_HI, green: MI_LO...MI_HI, blue: MI_LO...MI_HI } => Color::DarkGray,
+            _                                                                                => Color::LightGray
         }
     }
 }
