@@ -2,7 +2,6 @@ use arch;
 use memory;
 use memory::buddy::PageFrame;
 use memory::kernel::{PhysAddr, VirtAddr};
-use core::ops::Range;
 use core::slice;
 use core::ptr::{self, Shared};
 use core::{u32, usize};
@@ -212,22 +211,22 @@ impl PageTable {
         pte.set_address(phys_addr);
     }
 
-    fn map_range(&mut self, flags: (u16, u16), virt_range: Range<VirtAddr>, phys_range: Range<PhysAddr>)
+    fn map_range(&mut self, flags: (u16, u16), virt_addr: VirtAddr, phys_addr: PhysAddr, size: usize)
     {
-        let virt_range = virt_range.start.value() .. virt_range.end.value();
-        let phys_range = phys_range.start.value() .. phys_range.end.value();
+        let virt_range = virt_addr.value() .. virt_addr.value() + size;
+        let phys_range = phys_addr.value() .. phys_addr.value() + size as arch::AddrType;
 
         for (virt_addr, phys_addr) in virt_range.step_by(arch::PAGE_SIZE).zip(phys_range.step_by(FRAME_SIZE_ADDR)) {
             self.map(flags, VirtAddr::from_raw(virt_addr), PhysAddr::from_raw(phys_addr));
         }
     }
 
-    pub fn map_direct(&mut self, flags: (u16, u16), phys_range: Range<PhysAddr>) {
-        assert!(phys_range.end.value() <= usize::MAX as arch::AddrType);
+    pub fn map_direct(&mut self, flags: (u16, u16), phys_addr: PhysAddr, size: usize) {
+        assert!(phys_addr.value().checked_add(size as arch::AddrType)
+                .map_or(false, |addr| addr <= usize::MAX as arch::AddrType));
 
-        let virt_range = VirtAddr::from_raw(phys_range.start.value() as usize)
-            .. VirtAddr::from_raw(phys_range.end.value() as usize);
-        self.map_range(flags, virt_range, phys_range);
+        let virt_addr = VirtAddr::from_raw(phys_addr.value() as usize);
+        self.map_range(flags, virt_addr, phys_addr, size);
     }
 
     fn find_free_addr(&mut self, size: usize) -> VirtAddr {
@@ -265,9 +264,7 @@ impl PageTable {
         let virt_addr = self.find_free_addr(size);
         let phys_addr = unsafe { (**page).addr() };
         if !virt_addr.is_null() {
-            let virt_range = virt_addr .. virt_addr + size;
-            let phys_range = phys_addr .. phys_addr + size as arch::AddrType;
-            self.map_range(flags, virt_range, phys_range);
+            self.map_range(flags, virt_addr, phys_addr, size);
         } else {
             debug_log!("Unable to map a page {:p}", unsafe { (**page).addr() });
         }
@@ -291,10 +288,10 @@ pub fn pre_init() {
 #[inline]
 pub fn init() {
     unsafe {
-        let memory_start = PhysAddr::from_raw(0).as_virt_addr();
-        kernel_pt.map_range(PageTable::FLAGS_KERNEL,
-                            memory_start .. memory::kernel::end_addr(),
-                            memory_start.as_phys_addr() .. memory::kernel::end_addr().as_phys_addr());
+        let memory_start = PhysAddr::from_raw(0);
+        let memory_start_virt = memory_start.as_virt_addr();
+        let size = memory::kernel::end_addr() - memory_start_virt;
+        kernel_pt.map_range(PageTable::FLAGS_KERNEL, memory_start_virt, memory_start, size);
 
         kernel_pt.reset();
     }

@@ -1,5 +1,5 @@
 use memory;
-use arch::{self, multiboot, page};
+use arch::{multiboot, page};
 use drivers::display::{Color, DisplaySize, Display};
 use core::mem;
 use core::{u8, u16, u32};
@@ -30,9 +30,7 @@ impl Vbe {
         );
 
         let res = vbe.minfo.h_res as usize * vbe.minfo.v_res as usize;
-        let vram = vbe.minfo.vram();
-        let vram_end = vram + (res * vbe.minfo.bpp as usize) as arch::AddrType;
-        page::table().map_direct(page::PageTable::FLAGS_KERNEL, vram .. vram_end);
+        page::table().map_direct(page::PageTable::FLAGS_KERNEL, vbe.minfo.vram(), res * vbe.minfo.bpp as usize);
 
         vbe
     }

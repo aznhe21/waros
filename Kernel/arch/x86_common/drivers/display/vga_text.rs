@@ -179,9 +179,7 @@ pub struct VgaText;
 impl VgaText {
     pub fn new() -> VgaText {
         let res = VGA_SIZE.0 as usize * VGA_SIZE.1 as usize;
-        let vram = PhysAddr::from_raw(VGA_ADDRESS);
-        let vram_end = vram + (res * u16::BYTES) as arch::AddrType;
-        page::table().map_direct(page::PageTable::FLAGS_KERNEL, vram .. vram_end);
+        page::table().map_direct(page::PageTable::FLAGS_KERNEL, PhysAddr::from_raw(VGA_ADDRESS), res * u16::BYTES);
 
         VgaText
     }

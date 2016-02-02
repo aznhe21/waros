@@ -1,5 +1,5 @@
 use memory;
-use arch::{self, multiboot, page};
+use arch::{multiboot, page};
 use arch::x86_io::{inw, outw};
 use drivers::display::{Color, DisplaySize, Display};
 use core::u32;
@@ -62,9 +62,7 @@ impl Bochs {
             write_reg(VBE_DISPI_INDEX_ENABLE, VBE_DISPI_ENABLED | VBE_DISPI_LFB_ENABLED);
 
             let res = width as usize * height as usize;
-            let vram = minfo.vram();
-            let vram_end = vram + (res * u32::BYTES) as arch::AddrType;
-            page::table().map_direct(page::PageTable::FLAGS_KERNEL, vram .. vram_end);
+            page::table().map_direct(page::PageTable::FLAGS_KERNEL, minfo.vram(), res * u32::BYTES);
         }
 
         Bochs {
