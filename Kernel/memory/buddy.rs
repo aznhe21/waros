@@ -42,7 +42,7 @@ impl BuddyManager {
                 None
             } else {
                 // 開始アドレスとブロックの大きさ
-                Some((start, ((end.value() - start.value()) / FRAME_SIZE_ADDR) as usize))
+                Some((start, ((end - start) / FRAME_SIZE_ADDR) as usize))
             }
         });
 

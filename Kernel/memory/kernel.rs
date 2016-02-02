@@ -74,6 +74,15 @@ impl Sub<arch::AddrType> for PhysAddr {
     }
 }
 
+impl Sub<PhysAddr> for PhysAddr {
+    type Output = arch::AddrType;
+
+    #[inline(always)]
+    fn sub(self, rhs: PhysAddr) -> arch::AddrType {
+        self.0 - rhs.0
+    }
+}
+
 impl SubAssign<arch::AddrType> for PhysAddr {
     #[inline(always)]
     fn sub_assign(&mut self, rhs: arch::AddrType) {
@@ -124,7 +133,7 @@ impl VirtAddr {
 
     #[inline(always)]
     pub fn as_phys_addr(&self) -> PhysAddr {
-        assert!(*self <= end_addr(), "Out of kernel space: {:?} > {:?}", self, end_addr());
+        assert!(*self <= end_addr(), "Out of kernel space: {:p} > {:p}", self, end_addr());
         PhysAddr((self.value() - arch::KERNEL_BASE) as arch::AddrType)
     }
 
@@ -171,6 +180,15 @@ impl Sub<usize> for VirtAddr {
     #[inline(always)]
     fn sub(self, rhs: usize) -> VirtAddr {
         VirtAddr(self.0 - rhs)
+    }
+}
+
+impl Sub<VirtAddr> for VirtAddr {
+    type Output = usize;
+
+    #[inline(always)]
+    fn sub(self, rhs: VirtAddr) -> usize {
+        self.0 - rhs.0
     }
 }
 

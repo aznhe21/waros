@@ -26,7 +26,7 @@ pub fn init_by_iter<I: Iterator<Item=Range<PhysAddr>>>(size: arch::AddrType, f: 
 
 #[inline(always)]
 pub fn init_by_manual(range: Range<PhysAddr>) {
-    init_by_iter(range.end.value() - range.start.value(), iter::once(range));
+    init_by_iter(range.end - range.start, iter::once(range));
 }
 
 pub unsafe fn init_by_detection(max_addr: PhysAddr) {

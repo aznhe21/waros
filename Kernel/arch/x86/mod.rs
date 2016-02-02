@@ -57,19 +57,17 @@ extern {
 
 #[inline(always)]
 pub fn kernel_start() -> VirtAddr {
-    let addr = &__kernel_start as *const u8 as usize;
-    VirtAddr::from_raw(addr)
+    VirtAddr::from_ptr(&__kernel_start)
 }
 
 #[inline(always)]
 pub fn kernel_end() -> VirtAddr {
-    let addr = &__kernel_end as *const u8 as usize;
-    VirtAddr::from_raw(addr)
+    VirtAddr::from_ptr(&__kernel_end)
 }
 
 #[inline(always)]
 pub fn kernel_size() -> usize {
-    kernel_end().value() - kernel_start().value()
+    kernel_end() - kernel_start()
 }
 
 #[no_mangle]
