@@ -2,13 +2,20 @@
 # CONFIG: Architecture to build for
 # ARCH ?= amd64
 ARCH ?= x86
+# ARCH ?= arm
 
 DEBUG ?= yes
 
 ifeq ($(ARCH),amd64)
     TRIPLE ?= x86_64-none-elf-
+    GRUB_BUILD=yes
 else ifeq ($(ARCH),x86)
     TRIPLE ?= i686-elf-
+    GRUB_BUILD=yes
+else ifeq ($(ARCH),arm)
+    TRIPLE ?= arm-none-eabi-
+    MACH ?= bcm
+    # MACH ?= versatile
 else
     $(error Unknown architecture $(ARCH))
 endif
@@ -39,9 +46,13 @@ ifeq ($(DEBUG),yes)
 else
     RUSTFLAGS += -O
 endif
-# - amd64 needs to be set to use soft floating point
+
 ifeq ($(ARCH),amd64)
+    # - amd64 needs to be set to use soft floating point
     RUSTFLAGS += -C soft-float
+else ifeq ($(ARCH),arm)
+    RUSTFLAGS += --cfg target_mach=\"$(MACH)\"
+    LINKFLAGS := --defsym MACH_$(MACH)=1 $(LINKFLAGS)
 endif
 
 # Objects
@@ -55,11 +66,17 @@ KERNEL_OBJS := start.o assembly.o kernel.o
 OBJS := $(KERNEL_OBJS) $(DEP_OBJS)
 OBJS := $(OBJS:%=$(OBJDIR)%)
 BIN := ../kernel.$(ARCH).bin
+DSM_BIN := $(BIN)
 DSM := $(BIN).dsm
-GRUB_DIR := ../grub/
-GRUB_CFG := $(GRUB_DIR)boot/grub/grub.cfg
-GRUB_IMG := $(GRUB_DIR)kernel.img
-GRUB_ISO := ../grub.$(ARCH).iso
+ifeq ($(GRUB_BUILD),yes)
+    GRUB_DIR := ../grub/
+    GRUB_CFG := $(GRUB_DIR)boot/grub/grub.cfg
+    GRUB_IMG := $(GRUB_DIR)kernel.img
+    GRUB_ISO := ../grub.$(ARCH).iso
+endif
+ifeq ($(ARCH),arm)
+    DSM_BIN := $(BIN).elf
+endif
 
 .PHONY: all dsm clean distclean UPDATE
 
@@ -85,6 +102,9 @@ $(BIN): $(OBJS) $(LINKSCRIPT)
 ifeq ($(ARCH),amd64)
 	@mv $@ $@.elf64
 	@$(OBJCOPY) $@.elf64 -F elf32-i386 $@
+else ifeq ($(ARCH),arm)
+	mv $@ $@.elf
+	$(OBJCOPY) $@.elf -O binary $@
 endif
 
 $(GRUB_ISO): $(BIN) $(GRUB_CFG)
@@ -92,7 +112,7 @@ $(GRUB_ISO): $(BIN) $(GRUB_CFG)
 	$(MKRESCUE) -o $@ $(GRUB_DIR)
 
 $(DSM): $(BIN)
-	$(OBJDUMP) -S $(BIN) > $@
+	$(OBJDUMP) -S $(DSM_BIN) > $@
 
 ../libcore/lib.rs: ../rustc-nightly-src.tar.gz ../libcore_nofp.patch
 	tar -xmf ../rustc-nightly-src.tar.gz -C ../ rustc-nightly/src/libcore --transform 's~^rustc-nightly/src/~~'
