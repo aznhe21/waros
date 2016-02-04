@@ -1,6 +1,9 @@
 pub use self::atags::init_memory;
 use memory;
 use memory::kernel::VirtAddr;
+use logging::Writer;
+use core::ptr;
+use core::fmt::Write;
 
 #[cfg(target_mach="versatile")] #[path="mach/versatile/mod.rs"]
 pub mod mach;
@@ -64,8 +67,53 @@ pub unsafe extern "C" fn arm_main(_r0: u32, _r1: u32, _atags: u32) {
     log!("WARos: pre boot");
 }
 
+struct StackFrame(*const u32);
+
+impl StackFrame {
+    #[inline(always)]
+    pub fn new() -> StackFrame {
+        unsafe {
+            let fp: *const u32;
+            asm!("mov $0, fp" : "=r"(fp) ::: "volatile");
+            StackFrame(fp)
+        }
+    }
+}
+
+impl Iterator for StackFrame {
+    type Item = u32;
+
+    fn next(&mut self) -> Option<u32> {
+        if self.0.is_null() {
+            None
+        } else {
+            unsafe {
+                let pc = *self.0.offset(1) - 4;
+
+                let fp = *self.0 as *const u32;
+                self.0 = if fp <= self.0 {
+                    ptr::null_mut()
+                } else {
+                    fp
+                };
+
+                Some(pc)
+            }
+        }
+    }
+}
+
 pub fn print_backtrace() {
-    log!("Stacktrace not available");
+    let mut writer = Writer::get(module_path!());
+    let mut first = true;
+    for pc in StackFrame::new() {
+        let _ = if first {
+            first = false;
+            write!(&mut writer, "Backtrace: {:x}", pc)
+        } else {
+            write!(&mut writer, " > {:x}", pc)
+        };
+    }
 }
 
 pub fn print_registers() {
