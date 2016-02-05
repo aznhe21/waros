@@ -5,6 +5,7 @@ use core::mem;
 use core::{u8, u16, u32};
 use core::ops::Range;
 
+#[allow(dead_code)]
 pub struct Vbe {
     cinfo: &'static multiboot::VbeControllerInfo,
     minfo: &'static multiboot::VbeModeInfo

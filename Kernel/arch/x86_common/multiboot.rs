@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use rt;
 use arch;
 use memory;

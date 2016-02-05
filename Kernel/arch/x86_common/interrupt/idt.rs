@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use super::pic::IRQ;
 use core::mem;
 
@@ -21,16 +23,16 @@ const INT_ALIGNMENT_CHECK:              u8 = 0x11;
 const INT_MACHINE_CHECK:                u8 = 0x12;
 const INT_SIMD_FLOATINGPOINT_EXCEPTION: u8 = 0x13;
 
-const DEF_IDT_FLAGS_INTGATE_16BIT: u8 = 0x06;
-const DEF_IDT_FLAGS_TSKGATE:       u8 = 0x05;
-const DEF_IDT_FLAGS_CALL_GATE:     u8 = 0x0C;
-const DEF_IDT_FLAGS_INTGATE_32BIT: u8 = 0x0E;
-const DEF_IDT_FLAGS_TRPGATE:       u8 = 0x0F;
-const DEF_IDT_FLAGS_DPL_LV0:       u8 = 0x00;
-const DEF_IDT_FLAGS_DPL_LV1:       u8 = 0x20;
-const DEF_IDT_FLAGS_DPL_LV2:       u8 = 0x40;
-const DEF_IDT_FLAGS_DPL_LV3:       u8 = 0x60;
-const DEF_IDT_FLAGS_PRESENT:       u8 = 0x80;
+const IDT_FLAGS_INTGATE_16BIT: u8 = 0x06;
+const IDT_FLAGS_TSKGATE:       u8 = 0x05;
+const IDT_FLAGS_CALL_GATE:     u8 = 0x0C;
+const IDT_FLAGS_INTGATE_32BIT: u8 = 0x0E;
+const IDT_FLAGS_TRPGATE:       u8 = 0x0F;
+const IDT_FLAGS_DPL_LV0:       u8 = 0x00;
+const IDT_FLAGS_DPL_LV1:       u8 = 0x20;
+const IDT_FLAGS_DPL_LV2:       u8 = 0x40;
+const IDT_FLAGS_DPL_LV3:       u8 = 0x60;
+const IDT_FLAGS_PRESENT:       u8 = 0x80;
 
 const IDT_SIZE: usize = 256;
 
@@ -70,17 +72,17 @@ impl InterruptDescriptorTable {
 
     #[inline(always)]
     unsafe fn set_exception(&mut self, idtr: usize, handler: InterruptHandler) {
-        self.set_idt(idtr, handler, DEF_IDT_FLAGS_PRESENT | DEF_IDT_FLAGS_TRPGATE);
+        self.set_idt(idtr, handler, IDT_FLAGS_PRESENT | IDT_FLAGS_TRPGATE);
     }
 
     #[inline(always)]
     unsafe fn set_interrupt(&mut self, idtr: usize, handler: InterruptHandler) {
-        self.set_idt(idtr, handler, DEF_IDT_FLAGS_PRESENT | DEF_IDT_FLAGS_INTGATE_32BIT);
+        self.set_idt(idtr, handler, IDT_FLAGS_PRESENT | IDT_FLAGS_INTGATE_32BIT);
     }
 
     #[inline(always)]
     unsafe fn set_user_interrupt(&mut self, idtr: usize, handler: InterruptHandler) {
-        self.set_idt(idtr, handler, DEF_IDT_FLAGS_PRESENT | DEF_IDT_FLAGS_TRPGATE | DEF_IDT_FLAGS_DPL_LV3);
+        self.set_idt(idtr, handler, IDT_FLAGS_PRESENT | IDT_FLAGS_TRPGATE | IDT_FLAGS_DPL_LV3);
     }
 
     unsafe fn load(&mut self) {

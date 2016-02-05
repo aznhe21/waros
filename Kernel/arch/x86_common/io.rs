@@ -9,6 +9,7 @@
  * This code has been put into the public domain, there are no restrictions on
  * its use, and the author takes no liability.
  */
+#![allow(dead_code)]
 
 /// Write a byte to the specified port
 #[inline]

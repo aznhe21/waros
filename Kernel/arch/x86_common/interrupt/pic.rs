@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use arch::x86_io::{inb, outb};
 
 const PORT_MASTER_PIC_COMMAND: u16 = 0x0020;

@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use memory;
 use arch::{multiboot, page};
 use arch::x86_io::{inw, outw};

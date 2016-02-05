@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use arch;
 use memory;
 use memory::buddy::PageFrame;

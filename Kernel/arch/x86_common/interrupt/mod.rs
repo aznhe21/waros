@@ -6,25 +6,23 @@ pub mod pit;
 mod a20;
 pub mod device;
 
-const GDT_ENTRY_BOOT_CS:  usize = 2;
-const GDT_ENTRY_BOOT_DS:  usize = 3;
-//const GDT_ENTRY_BOOT_TSS: usize = 4;
-const GDT_BOOT_ENTRIES:   usize = 4;
+pub const GDT_ENTRY_BOOT_CS:  usize = 2;
+pub const GDT_ENTRY_BOOT_DS:  usize = 3;
+pub const GDT_BOOT_ENTRIES:   usize = 4;
 
-const BOOT_CS:  usize = GDT_ENTRY_BOOT_CS  * 8;
-const BOOT_DS:  usize = GDT_ENTRY_BOOT_DS  * 8;
-//const BOOT_TSS: usize = GDT_ENTRY_BOOT_TSS * 8;
+pub const BOOT_CS:  usize = GDT_ENTRY_BOOT_CS  * 8;
+pub const BOOT_DS:  usize = GDT_ENTRY_BOOT_DS  * 8;
 
-const GDT_ENTRY_KERNEL_CS:          usize = 12;
-const GDT_ENTRY_KERNEL_DS:          usize = 13;
-const GDT_ENTRY_DEFAULT_USER_CS:    usize = 14;
-const GDT_ENTRY_DEFAULT_USER_DS:    usize = 15;
-const GDT_ENTRY_TSS:                usize = 16;
-const GDT_ENTRY_LDT:                usize = 17;
-const GDT_ENTRIES:                  usize = 18;
+pub const GDT_ENTRY_KERNEL_CS:          usize = 12;
+pub const GDT_ENTRY_KERNEL_DS:          usize = 13;
+pub const GDT_ENTRY_DEFAULT_USER_CS:    usize = 14;
+pub const GDT_ENTRY_DEFAULT_USER_DS:    usize = 15;
+pub const GDT_ENTRY_TSS:                usize = 16;
+pub const GDT_ENTRY_LDT:                usize = 17;
+pub const GDT_ENTRIES:                  usize = 18;
 
-const KERNEL_CS: usize = GDT_ENTRY_KERNEL_CS * 8;
-const KERNEL_DS: usize = GDT_ENTRY_KERNEL_DS * 8;
+pub const KERNEL_CS: usize = GDT_ENTRY_KERNEL_CS * 8;
+pub const KERNEL_DS: usize = GDT_ENTRY_KERNEL_DS * 8;
 
 #[inline(always)]
 pub fn enable() {

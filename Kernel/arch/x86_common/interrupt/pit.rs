@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use arch::x86_io::outb;
 use timer;
 use super::pic::IRQ;

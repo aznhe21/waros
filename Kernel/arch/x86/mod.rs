@@ -9,7 +9,6 @@
  * This code has been put into the public domain, there are no restrictions on
  * its use, and the author takes no liability.
  */
-#![allow(dead_code)]
 
 pub use self::multiboot::init_memory;
 use memory;
