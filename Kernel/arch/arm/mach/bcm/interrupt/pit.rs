@@ -83,7 +83,9 @@ pub unsafe fn init() {
 }
 
 unsafe fn irq_handler(_irq: pic::IRQ) {
-    Timer::M1.set(Timer::M1.tick().wrapping_add(INTERVAL_MS * 1000));
+    //let tick = Timer::M1.tick();
+    let tick = SYSTIMER_CLO.load();
+    Timer::M1.set(tick.wrapping_add(INTERVAL_MS * 1000));
     Timer::M1.enable();
 
     timer::manager().tick(INTERVAL_MS as usize);
