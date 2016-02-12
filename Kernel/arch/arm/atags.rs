@@ -181,7 +181,7 @@ impl Iterator for AtagIter {
         unsafe {
             if (*self.atag).size > 2 && (*self.atag).tag != ATAG_NONE {
                 let ret = &*self.atag;
-                self.atag = &*((self.atag as *const u8).offset((*self.atag).size as isize) as *const Atag);
+                self.atag = &*((self.atag as *const usize).offset((*self.atag).size as isize) as *const Atag);
                 Some(ret)
             } else {
                 None
