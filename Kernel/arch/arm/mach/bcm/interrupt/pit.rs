@@ -83,12 +83,12 @@ pub unsafe fn init() {
 }
 
 unsafe fn irq_handler(_irq: pic::IRQ) {
-    //let tick = Timer::M1.tick();
-    let tick = SYSTIMER_CLO.load();
-    Timer::M1.set(tick.wrapping_add(INTERVAL_MS * 1000));
+    let tick = Timer::M1.tick();
+    let elapsed_ms = ((SYSTIMER_CLO.load() - tick) / 1000 + 1) * INTERVAL_MS;
+    Timer::M1.set(tick.wrapping_add(elapsed_ms * 1000));
     Timer::M1.enable();
 
-    timer::manager().tick(INTERVAL_MS as usize);
+    timer::manager().tick(elapsed_ms as usize);
 }
 
 pub fn clock() -> u64 {

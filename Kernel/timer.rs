@@ -70,6 +70,7 @@ impl TimerManager {
         }
     }
 
+    #[inline(always)]
     pub fn counter(&self) -> usize {
         self.counter
     }
