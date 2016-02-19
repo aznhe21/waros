@@ -1,0 +1,19 @@
+{
+	"data-layout": "e-m:e-p:32:32-i1:8:32-i8:8:32-i16:16:32-i64:64-v128:64:128-a:0:32-n32-S64",
+	"llvm-target": "arm-unknown-none-gnueabihf",
+	"target-endian": "little",
+	"target-pointer-width": "32",
+	"relocation-model": "static",
+	"os": "none",
+	"arch": "arm",
+	"cpu": "arm1176jzf-s",
+	"features": "+v6",
+	"pre_link_args": [
+		"-arch",
+		"armv6j"
+	],
+	"no-compiler-rt": true,
+	"eliminate-frame-pointer": false,
+	"disable-redzone": true,
+	"morestack": false
+}

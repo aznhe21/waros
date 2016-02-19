@@ -20,6 +20,7 @@
 #![feature(unique, shared)]
 
 #![cfg_attr(any(target_arch="x86_64", target_arch="x86"), feature(step_by))]
+#![cfg_attr(target_arch="arm", feature(step_by))]
 
 #![no_std]
 #![no_builtins]
@@ -49,6 +50,8 @@ pub mod sync;
 #[cfg(target_arch="x86_64")] #[path="arch/amd64/mod.rs"]
 pub mod arch;
 #[cfg(target_arch="x86")] #[path="arch/x86/mod.rs"]
+pub mod arch;
+#[cfg(target_arch="arm")] #[path="arch/arm/mod.rs"]
 pub mod arch;
 
 // Exception handling (panic)
@@ -82,9 +85,9 @@ pub fn kmain() -> ! {
     //memory::init_by_manual(arch::kernel_end().as_phys_addr() .. arch::kernel_end().as_phys_addr() + 0x1000000);// 16MB
     //memory::init_by_detection(memory::MAX_ADDR);
 
-    if arch::drivers::display::Bochs::is_available() {
+    /*if arch::drivers::display::Bochs::is_available() {
         drivers::display::set(alloc::boxed::Box::new(arch::drivers::display::Bochs::new(1280, 720)));
-    }
+    }*/
 
     event::init();
     timer::init();
