@@ -1,6 +1,7 @@
 use memory;
 use arch::{multiboot, page};
 use drivers::display::{Color, DisplaySize, Display};
+use core::cmp;
 use core::mem;
 use core::{u8, u16, u32};
 use core::ops::Range;
@@ -61,9 +62,19 @@ impl Vbe {
     }
 
     #[inline]
+    fn clamp_x(&self, x: DisplaySize) -> DisplaySize {
+        cmp::min(cmp::max(x, 0), self.width() - 1)
+    }
+
+    #[inline]
+    fn clamp_y(&self, y: DisplaySize) -> DisplaySize {
+        cmp::min(cmp::max(y, 0), self.height() - 1)
+    }
+
+    #[inline]
     fn put_by_uint<T: Copy>(&self, color: T, x: DisplaySize, y: DisplaySize) {
-        debug_assert!(x >= 0 && x < self.width());
-        debug_assert!(y >= 0 && y < self.height());
+        let x = self.clamp_x(x);
+        let y = self.clamp_y(y);
 
         let offset = y as isize * self.bpl::<T>() as isize + x as isize;
         let vram = self.vram::<T>();
@@ -74,8 +85,8 @@ impl Vbe {
 
     #[inline]
     fn horizontal_line_by_uint<T : Copy>(&self, color: T, range: Range<DisplaySize>, y: DisplaySize) {
-        debug_assert!(range.start >= 0 && range.end < self.width());
-        debug_assert!(y >= 0 && y < self.height());
+        let range = self.clamp_x(range.start) .. self.clamp_x(range.end);
+        let y = self.clamp_y(y);
 
         unsafe {
             let offset = y as isize * self.bpl::<T>() as isize;
